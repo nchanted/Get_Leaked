@@ -1,0 +1,1041 @@
+<!-- GET LEAKED! — A Data Loss Prevention thriller -->
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>GET LEAKED! // Meridian Trust DLP Console</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Special+Elite&family=IBM+Plex+Mono:wght@400;500;600&family=Oswald:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#2e2410;
+    --ink-soft:#766743;
+    --line:#c7b386;
+    --line-soft:#d6c69f;
+    --surface:#f1e6c9;
+    --surface-2:#e7d8b6;
+    --bar:#2e2614;
+    --bar-2:#221c0e;
+    --amber:#d6921f;
+    --ochre:#8f5e10;
+    --green:#2c6b43;
+    --green-br:#4f9a6e;
+    --red:#a8341f;
+    --red-br:#c9472f;
+    --red-deep:#7a2615;
+    --paper:#f8efd6;
+    --paper-line:#d2c094;
+    --paper-ink:#2a2210;
+    --mut:#857851;
+    --mono:'IBM Plex Mono',ui-monospace,monospace;
+    --type:'Special Elite',monospace;
+    --cond:'Oswald',sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{
+    background:
+      radial-gradient(130% 100% at 50% -10%, #ecdcb6 0%, #ddc99e 58%, #ccb482 100%);
+    color:var(--ink); font-family:var(--mono);
+    -webkit-font-smoothing:antialiased; overflow:hidden;
+  }
+  /* paper grain */
+  body::after{
+    content:""; position:fixed; inset:0; pointer-events:none; z-index:60; opacity:.05;
+    background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='120' height='120'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
+    mix-blend-mode:multiply;
+  }
+  #app{height:100%; display:flex; flex-direction:column; max-width:1180px; margin:0 auto; position:relative; z-index:2}
+
+  /* ===== Top console bar ===== */
+  header{
+    border-bottom:2px solid #4a3f23;
+    background:linear-gradient(var(--bar),var(--bar-2));
+    padding:11px 18px; display:flex; align-items:center; gap:18px;
+    position:relative; overflow:hidden; flex:0 0 auto;
+    box-shadow:0 4px 14px rgba(60,48,20,.22);
+  }
+  header::before{ /* faint scanlines */
+    content:"";position:absolute;inset:0;pointer-events:none;opacity:.14;
+    background:repeating-linear-gradient(0deg,transparent 0 2px,rgba(0,0,0,.5) 2px 3px);
+  }
+  .brand{font-family:var(--cond);font-weight:700;letter-spacing:.18em;font-size:18px;color:var(--amber);text-transform:uppercase;text-shadow:0 0 14px rgba(224,160,47,.4)}
+  .brand small{display:block;font-size:9px;letter-spacing:.3em;color:#c2974a;font-weight:500}
+  .stats{margin-left:auto;display:flex;gap:22px;align-items:center}
+  .stat{font-family:var(--cond);text-align:right;line-height:1}
+  .stat b{display:block;font-size:9px;letter-spacing:.22em;color:#a3966f;text-transform:uppercase;margin-bottom:3px}
+  .stat span{font-size:18px;font-weight:600;letter-spacing:.04em;color:#efe7d2}
+  .bal{color:#79c79a} .bal.neg{color:#e2705c}
+  .strk{color:var(--amber)} .strk.bad{color:#e2705c}
+  .daytag{color:#efe7d2}
+
+  /* ===== Main work area ===== */
+  main{flex:1 1 auto; display:grid; grid-template-columns:1.25fr .9fr; gap:0; min-height:0}
+  .stage{position:relative; padding:22px 22px 18px; overflow:auto; border-right:1px solid var(--line)}
+  .console{padding:20px 20px; display:flex; flex-direction:column; min-height:0; background:linear-gradient(var(--surface),var(--surface-2)); border-left:1px solid var(--line-soft)}
+
+  /* queue strip */
+  .queue{display:flex;align-items:center;gap:8px;font-family:var(--cond);font-size:11px;letter-spacing:.2em;color:var(--mut);text-transform:uppercase;margin-bottom:14px}
+  .queue .pip{width:9px;height:9px;border:1px solid #b89a4e;border-radius:2px}
+  .queue .pip.done{background:#c2a85e}
+  .queue .pip.cur{background:var(--amber);box-shadow:0 0 8px var(--amber)}
+
+  /* ===== The intercepted item: paper memo ===== */
+  .item{
+    background:
+      linear-gradient(180deg, rgba(255,255,255,.4), transparent 60%),
+      repeating-linear-gradient(0deg, transparent 0 27px, rgba(120,100,40,.05) 27px 28px),
+      var(--paper);
+    color:var(--paper-ink);
+    border-radius:3px; padding:0; position:relative;
+    box-shadow:0 16px 34px rgba(80,62,24,.28), 0 2px 0 rgba(120,100,50,.15);
+    transform:rotate(-.25deg);
+    border:1px solid var(--paper-line);
+    animation:slidein .45s cubic-bezier(.2,.8,.2,1);
+  }
+  @keyframes slidein{from{opacity:0;transform:translateY(26px) rotate(-1.5deg)}to{opacity:1;transform:rotate(-.25deg)}}
+  .alertbar{
+    background:repeating-linear-gradient(45deg,var(--red-deep) 0 12px,#9e3322 12px 24px);
+    color:#ffe9df; font-family:var(--cond); font-weight:600; letter-spacing:.16em; text-transform:uppercase;
+    font-size:11px; padding:7px 14px; display:flex; gap:10px; align-items:center; border-bottom:2px solid #5a1d11;
+  }
+  .alertbar .dot{width:8px;height:8px;border-radius:50%;background:#ff6a4d;box-shadow:0 0 9px #ff6a4d;animation:blink 1s steps(2) infinite}
+  @keyframes blink{50%{opacity:.25}}
+  .memo{padding:16px 20px 20px}
+  .lh{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:1px dashed var(--paper-line);padding-bottom:10px;margin-bottom:12px}
+  .lh .org{font-family:var(--cond);font-weight:700;letter-spacing:.08em;font-size:13px;color:#403a2e}
+  .lh .org small{display:block;font-size:9px;letter-spacing:.25em;color:#8a7d5f;font-weight:500}
+  .lh .ref{font-family:var(--mono);font-size:10px;color:#8a7d5f;text-align:right}
+  table.fields{width:100%;border-collapse:collapse;font-size:13px;font-family:var(--mono)}
+  table.fields td{padding:4px 0;vertical-align:top}
+  table.fields td.k{width:118px;color:#998c6b;text-transform:uppercase;font-size:10px;letter-spacing:.12em;padding-top:6px}
+  table.fields td.v{color:#231f17}
+  .pill{display:inline-block;padding:1px 8px;border-radius:2px;font-size:11px;font-weight:600;letter-spacing:.04em}
+  .c-Public{background:#cfe0c6;color:#34501f}
+  .c-Internal{background:#cdd6e2;color:#2c3c57}
+  .c-Confidential{background:#efd3a3;color:#7a4a07}
+  .c-Restricted{background:#e9bcb0;color:#7a2418}
+  .flag{background:#f1ddb0;border-bottom:1px solid #c79b3f}
+  .hi{background:var(--amber);color:#1a1408;padding:0 3px;border-radius:1px;animation:hipop .3s}
+  @keyframes hipop{from{background:#fff}to{background:var(--amber)}}
+  .bodytxt{margin-top:12px;padding:11px 13px;background:rgba(120,100,40,.06);border-left:3px solid #cdbf9d;font-family:var(--type);font-size:13px;line-height:1.5;color:#332e22;white-space:pre-wrap}
+  .attach{margin-top:10px;font-size:11px;color:#7d7257;font-family:var(--mono)}
+  .attach b{color:#403a2e}
+  .scanline-note{margin-top:12px;font-size:11px;color:#9a3b27;font-family:var(--cond);letter-spacing:.06em;display:none}
+  .scanline-note.show{display:block}
+
+  /* sticky note for special events */
+  .sticky{
+    position:absolute;right:-8px;top:46px;width:184px;background:#eccb50;color:#3a3210;
+    font-family:var(--type);font-size:12px;line-height:1.4;padding:12px 13px;transform:rotate(2.5deg);
+    box-shadow:0 10px 22px rgba(80,62,24,.32);border:1px solid #cdb340;
+  }
+  .sticky b{display:block;font-size:10px;letter-spacing:.1em;text-transform:uppercase;margin-bottom:5px;color:#7a5e05}
+
+  /* stamp overlay */
+  .stamp{
+    position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;z-index:5;
+  }
+  .stamp .mark{
+    font-family:var(--cond);font-weight:700;font-size:46px;letter-spacing:.1em;text-transform:uppercase;
+    border:5px solid;padding:8px 22px;border-radius:6px;opacity:0;transform:scale(2.4) rotate(-18deg);
+  }
+  .stamp.go .mark{animation:slam .5s cubic-bezier(.2,1.4,.4,1) forwards}
+  @keyframes slam{0%{opacity:0;transform:scale(2.4) rotate(-18deg)}60%{opacity:1;transform:scale(.92) rotate(-12deg)}100%{opacity:.92;transform:scale(1) rotate(-11deg)}}
+  .mark.release{color:#3f9a63;border-color:#3f9a63;text-shadow:0 1px 0 rgba(255,255,255,.4)}
+  .mark.block{color:var(--red-br);border-color:var(--red-br);text-shadow:0 1px 0 rgba(255,255,255,.4)}
+
+  /* ===== Console right side ===== */
+  .panel-title{font-family:var(--cond);letter-spacing:.22em;text-transform:uppercase;font-size:11px;color:var(--mut);margin:0 0 10px;display:flex;align-items:center;gap:8px}
+  .panel-title::before{content:"";width:6px;height:6px;background:var(--amber);box-shadow:0 0 7px var(--amber)}
+  .verdict-q{font-family:var(--type);font-size:14px;color:#4a4231;background:#f6eccf;border:1px solid var(--line);border-left:3px solid var(--amber);padding:11px 14px;margin-bottom:14px;line-height:1.5}
+  .btns{display:flex;flex-direction:column;gap:10px}
+  .btn{
+    font-family:var(--cond);font-weight:600;letter-spacing:.1em;text-transform:uppercase;font-size:15px;
+    padding:14px 16px;border:1px solid;border-radius:4px;cursor:pointer;background:#f6eccf;color:var(--ink);
+    transition:.12s;display:flex;justify-content:space-between;align-items:center;
+  }
+  .btn small{font-family:var(--mono);font-size:9px;letter-spacing:.12em;opacity:.55;text-transform:none}
+  .btn.release{border-color:#7bb491;color:var(--green)} .btn.release:hover{background:#e9f2ea;box-shadow:inset 0 0 0 1px var(--green)}
+  .btn.block{border-color:#d39b90;color:var(--red)} .btn.block:hover{background:#f8e8e4;box-shadow:inset 0 0 0 1px var(--red)}
+  .btn.ghost{border-color:var(--line);color:var(--ink-soft);font-size:12px;padding:10px 14px}
+  .btn.ghost:hover{color:var(--ochre);border-color:var(--ochre)}
+  .btn:disabled{opacity:.4;cursor:not-allowed}
+  .btn.special{border-color:#c6a85e;color:var(--ochre)} .btn.special:hover{background:#efe1bf}
+
+  .toolrow{display:flex;gap:10px;margin-bottom:14px}
+  .toolrow .btn{flex:1;justify-content:center}
+
+  /* citation panel */
+  .cite{margin-top:14px;border-top:1px dashed var(--line);padding-top:12px;display:none}
+  .cite.show{display:block;animation:fade .2s}
+  @keyframes fade{from{opacity:0}}
+  .cite h4{font-family:var(--cond);letter-spacing:.16em;text-transform:uppercase;font-size:11px;color:var(--ochre);margin:0 0 9px}
+  .cite-opt{font-family:var(--mono);font-size:12px;text-align:left;width:100%;background:#f6eccf;border:1px solid var(--line);color:#4a4231;padding:9px 11px;border-radius:3px;margin-bottom:7px;cursor:pointer;transition:.1s}
+  .cite-opt:hover{border-color:var(--ochre);color:var(--ochre);background:#efe1bf}
+  .cite-opt b{color:var(--ochre);font-family:var(--cond);letter-spacing:.06em}
+
+  /* feedback log */
+  .log{margin-top:auto;border-top:1px solid var(--line);padding-top:10px;font-size:11px;color:var(--ink-soft);font-family:var(--mono);min-height:42px;line-height:1.45}
+  .log .ok{color:var(--green)} .log .err{color:var(--red)} .log .warn{color:var(--ochre)}
+
+  /* ===== Rulebook drawer ===== */
+  #book{
+    position:fixed;top:0;right:0;height:100%;width:430px;max-width:92vw;z-index:40;
+    background:linear-gradient(#efe2c2,#e5d4af);border-left:3px solid var(--ochre);
+    box-shadow:-26px 0 56px rgba(70,55,20,.3);transform:translateX(102%);transition:transform .32s cubic-bezier(.3,.8,.3,1);
+    display:flex;flex-direction:column;
+  }
+  #book.open{transform:none}
+  .book-top{padding:16px 20px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between}
+  .book-top h3{font-family:var(--cond);letter-spacing:.18em;text-transform:uppercase;font-size:14px;color:var(--ochre);margin:0}
+  .x{cursor:pointer;color:var(--mut);font-size:22px;line-height:1;border:none;background:none}
+  .x:hover{color:var(--red)}
+  .rules{padding:8px 20px 24px;overflow:auto}
+  .rule{border-bottom:1px solid var(--line);padding:14px 0}
+  .rule .num{font-family:var(--cond);font-weight:700;color:var(--ochre);letter-spacing:.08em;font-size:13px}
+  .rule .nm{font-family:var(--cond);color:#3a3424;letter-spacing:.06em;font-size:14px;display:block;margin:2px 0 6px}
+  .rule p{margin:0;font-size:12.5px;line-height:1.55;color:#5f5740}
+  .rule.fresh{animation:freshpop .6s} @keyframes freshpop{0%{background:rgba(224,160,47,.28)}100%{background:transparent}}
+  .ref-block{margin-top:6px;font-size:11px;color:var(--mut)}
+  .ref-block code{background:#e0d0a6;padding:1px 5px;border-radius:2px;color:var(--green)}
+
+  /* ===== Modal screens ===== */
+  .scrim{position:fixed;inset:0;z-index:50;background:rgba(44,34,12,.6);display:none;align-items:center;justify-content:center;padding:24px;backdrop-filter:blur(3px)}
+  .scrim.show{display:flex;animation:fade .25s}
+  .modal{
+    max-width:620px;width:100%;background:linear-gradient(#f5eacf,#ebdcb8);border:1px solid var(--line);
+    border-radius:6px;box-shadow:0 30px 70px rgba(50,40,18,.42);overflow:hidden;max-height:90vh;display:flex;flex-direction:column;
+  }
+  .modal-top{background:linear-gradient(#e7d7ad,#ddca9e);padding:16px 24px;border-bottom:1px solid var(--line)}
+  .modal-top .k{font-family:var(--cond);letter-spacing:.26em;text-transform:uppercase;font-size:10px;color:var(--ochre)}
+  .modal-top h2{font-family:var(--cond);letter-spacing:.1em;text-transform:uppercase;margin:4px 0 0;color:#8a5a0e;font-size:24px}
+  .modal-body{padding:22px 24px;overflow:auto}
+  .memo-letter{font-family:var(--type);font-size:14px;line-height:1.7;color:#3a3322;white-space:pre-wrap}
+  .memo-letter .sig{color:var(--ochre);font-style:normal}
+  .newrule{margin-top:18px;background:rgba(214,146,31,.17);border:1px solid #c6a85e;border-radius:4px;padding:14px 16px}
+  .newrule .tag{font-family:var(--cond);letter-spacing:.2em;font-size:10px;color:var(--ochre);text-transform:uppercase}
+  .newrule b{display:block;font-family:var(--cond);font-size:15px;color:#3a3424;letter-spacing:.05em;margin:3px 0 6px}
+  .newrule p{margin:0;font-size:13px;line-height:1.55;color:#5f5740}
+  .modal-foot{padding:16px 24px;border-top:1px solid var(--line);display:flex;gap:12px;justify-content:flex-end;flex-wrap:wrap}
+  .settle-grid{display:grid;grid-template-columns:1fr auto;gap:7px 18px;font-family:var(--mono);font-size:14px;margin-bottom:8px}
+  .settle-grid .lbl{color:#5f5740} .settle-grid .amt{text-align:right;font-weight:600;color:var(--ink)}
+  .pos{color:var(--green)} .negc{color:var(--red)}
+  .ruleline{border-top:1px solid var(--line);margin:12px 0}
+  .notebox{margin-top:14px;font-size:13px;line-height:1.6;color:#4a4231;border-left:3px solid var(--amber);padding:4px 0 4px 14px;font-family:var(--type)}
+  .notebox.bad{border-color:var(--red);color:#8a3325}
+  .notebox.good{border-color:var(--green);color:#2c6b46}
+
+  /* title screen */
+  .title-card{text-align:center;max-width:560px}
+  .title-card .big{font-family:var(--cond);font-weight:700;font-size:64px;letter-spacing:.16em;color:#955f0e;text-shadow:0 2px 0 rgba(120,90,20,.12);line-height:.95;margin:0}
+  .title-card .sub{font-family:var(--cond);letter-spacing:.42em;text-transform:uppercase;font-size:12px;color:var(--mut);margin:10px 0 0}
+  .title-card .blurb{font-family:var(--type);font-size:15px;line-height:1.7;color:#4a4231;margin:26px 0 6px}
+  .start{font-family:var(--cond);font-weight:600;letter-spacing:.16em;text-transform:uppercase;font-size:16px;background:var(--amber);color:#2a1e08;border:none;padding:15px 40px;border-radius:4px;cursor:pointer;margin-top:22px;transition:.15s;box-shadow:0 4px 14px rgba(180,130,30,.3)}
+  .start:hover{box-shadow:0 0 26px rgba(224,160,47,.55);transform:translateY(-1px)}
+  .creds{font-size:11px;color:var(--ink-soft);margin-top:18px;font-family:var(--mono);line-height:1.7}
+  .creds b{color:var(--ochre)}
+
+  /* choice buttons in modal */
+  .choices{display:flex;flex-direction:column;gap:10px;margin-top:6px}
+  .choice{text-align:left;font-family:var(--mono);font-size:13.5px;line-height:1.5;background:#f6eccf;border:1px solid var(--line);color:#4a4231;padding:13px 15px;border-radius:4px;cursor:pointer;transition:.12s}
+  .choice:hover{border-color:var(--ochre);background:#efe1bf}
+  .choice b{color:var(--ochre);font-family:var(--cond);letter-spacing:.06em;display:block;margin-bottom:3px;text-transform:uppercase;font-size:12px}
+
+  @media(max-width:820px){
+    main{grid-template-columns:1fr;grid-template-rows:auto 1fr}
+    .stage{border-right:none;border-bottom:1px solid var(--line)}
+    .console{border-left:none}
+    .stats{gap:14px}.brand{font-size:14px}
+    .title-card .big{font-size:42px}
+  }
+
+</style>
+
+<div id="app">
+  <header>
+    <div class="brand">Meridian&nbsp;Trust<small>Data Loss Prevention Console v3.1</small></div>
+    <div class="stats">
+      <div class="stat"><b>Shift</b><span class="daytag" id="s-day">—</span></div>
+      <div class="stat"><b>Balance</b><span class="bal" id="s-bal">€0</span></div>
+      <div class="stat"><b>Strikes</b><span class="strk" id="s-strk">0 / 5</span></div>
+    </div>
+  </header>
+
+  <main>
+    <section class="stage">
+      <div class="queue" id="queue"></div>
+      <div id="itemSlot"></div>
+    </section>
+
+    <section class="console">
+      <div class="panel-title">Analyst Decision</div>
+      <div class="verdict-q" id="verdictQ">Awaiting intercepted item…</div>
+
+      <div class="toolrow">
+        <button class="btn ghost" id="btnScan">⌕ Run DLP Scan</button>
+        <button class="btn ghost" id="btnBook">▤ Rulebook</button>
+      </div>
+
+      <div class="btns" id="actionBtns"></div>
+
+      <div class="cite" id="citePanel">
+        <h4>Cite the policy you are enforcing</h4>
+        <div id="citeOpts"></div>
+        <button class="btn ghost" id="citeCancel" style="margin-top:4px">← back</button>
+      </div>
+
+      <div class="log" id="log">Day not started.</div>
+    </section>
+  </main>
+</div>
+
+<!-- Rulebook -->
+<aside id="book">
+  <div class="book-top">
+    <h3>Active Policy — Field Manual</h3>
+    <button class="x" id="bookClose">×</button>
+  </div>
+  <div class="rules" id="rulesList"></div>
+</aside>
+
+<!-- Modal -->
+<div class="scrim" id="scrim"><div id="modalHost"></div></div>
+
+<script>
+/* ========================================================= DATA ========= */
+const INTERNAL = "meridiantrust.com";
+const PERSONAL = ["gmail.com","yahoo.com","outlook.com","hotmail.com","icloud.com","proton.me"];
+const WHITELIST = ["clearwater-audit.com","lexford-legal.com"];
+const PARTNER_NAMES = {"clearwater-audit.com":"Clearwater Audit LLP","lexford-legal.com":"Lexford Legal"};
+const validTicket = t => !!t && /^DLP-\d{5}$/.test(t);
+const domainOf = e => (e.split("@")[1]||"").toLowerCase();
+
+/* The growing rulebook. day = shift it is introduced. */
+const RULES = [
+  {id:"R1",day:1,name:"PII Containment",
+   short:"Customer PII must never leave @meridiantrust.com.",
+   text:"Customer personal data — full account numbers, national ID numbers, payment-card numbers — may not be sent to any address outside @meridiantrust.com. Block any external message that carries it."},
+  {id:"R2",day:2,name:"No Personal Mailboxes",
+   short:"Confidential / Restricted may not go to personal email providers.",
+   text:"Anything marked CONFIDENTIAL or RESTRICTED may not be sent to a personal email provider (gmail, yahoo, outlook, hotmail, icloud, proton) — even by our own staff using a personal account."},
+  {id:"R3",day:3,name:"Approved Partners",
+   short:"Partners may receive sensitive mail only when ENCRYPTED.",
+   text:"Whitelisted partners — Clearwater Audit and Lexford Legal — may receive Confidential data or customer PII, but only when the message is ENCRYPTED. Unencrypted sensitive mail to a partner must be blocked."},
+  {id:"R4",day:4,name:"Bulk Export Tickets",
+   short:"Exports over 200 records need a valid approval ticket.",
+   text:"Any export of more than 200 customer records to an external recipient requires a valid approval ticket in the form DLP-##### (five digits). Missing, malformed, or absent ticket → block."},
+  {id:"R5",day:5,name:"Protected IP",
+   short:"Trading algorithms, source code & M&A docs may NEVER leave.",
+   text:"Trading algorithms, source code, and M&A deal documents may never leave the organisation. There is NO exception — not encryption, not a whitelisted partner, not an approval ticket. Always block when external."},
+  {id:"R6",day:6,name:"Watchlist Escalation",
+   short:"Block & escalate ALL mail from watchlisted personnel.",
+   text:"Personnel under active investigation are placed on the watchlist. Block and escalate ALL of their outbound mail — internal or external, sensitive or not — and let Compliance review it. Current watchlist: H. Reeve (CFO), M. Vale (Payments)."}
+];
+const ruleById = id => RULES.find(r=>r.id===id);
+
+/* Compute which active rules a case violates. */
+function violations(c, day){
+  const dom = domainOf(c.to);
+  const internal = dom===INTERNAL, external=!internal;
+  const personal = PERSONAL.includes(dom);
+  const whitel = WHITELIST.includes(dom);
+  const hasPII = (c.pii||[]).length>0;
+  const conf = c.cls==="Confidential"||c.cls==="Restricted";
+  const v=[];
+  if(day>=1 && hasPII && external){
+    const partnerOK = day>=3 && whitel && c.enc;       // R3 exception
+    if(!partnerOK) v.push("R1");
+  }
+  if(day>=2 && conf && personal) v.push("R2");
+  if(day>=3 && whitel && (conf||hasPII) && !c.enc) v.push("R3");
+  if(day>=4 && external && c.records>200 && !validTicket(c.ticket)) v.push("R4");
+  if(day>=5 && external && ["trade_algo","source_code","ma_docs"].includes(c.ip)) v.push("R5");
+  if(day>=6 && c.watch) v.push("R6");
+  return [...new Set(v)];
+}
+
+/* ---- The casework. Each item is a flagged outbound message. ---- */
+const CASES = [
+/* ===== SHIFT 1 — learning R1 ===== */
+{day:1,from:"Priya Anand · Retail Ops",to:"priya.anand@meridiantrust.com",
+  cls:"Internal",alert:"Recipient resembles internal address",
+  body:"Re-sending the branch rota to myself so I can print it at the front desk.",
+  attach:"branch_rota.pdf",pii:[],enc:false},
+{day:1,from:"Tom Becker · Collections",to:"t.becker.debt@gmail.com",
+  cls:"Confidential",alert:"Account numbers detected · external recipient",
+  body:"Forwarding the overdue list to my home address so I can chase them tonight.\nAcct 4471-009823, 4471-118840, 4471-330021…",
+  attach:"overdue_accounts.xlsx",pii:["account_number"],enc:false},
+{day:1,from:"Help Desk Auto",to:"updates@meridiantrust.com",
+  cls:"Public",alert:"Bulk recipient",
+  body:"Scheduled maintenance window this Sunday 02:00–04:00. No action required.",
+  attach:"",pii:[],enc:false},
+{day:1,from:"Sandra Pyle · Mortgages",to:"sandra_pyle@yahoo.com",
+  cls:"Internal",alert:"PII detected · external recipient",
+  body:"Client national ID for the Whitmore file so I can finish the application at home.\nID: 88-204-9931",
+  attach:"",pii:["national_id"],enc:false},
+{day:1,from:"Marketing",to:"newsletter@meridiantrust.com",
+  cls:"Public",alert:"Large attachment",
+  body:"Q2 customer newsletter draft for internal review. Nothing sensitive — please proof.",
+  attach:"newsletter_Q2.pdf",pii:[],enc:false},
+{day:1,from:"Dev Okoro · Cards",to:"dev.okoro@meridiantrust.com",
+  cls:"Confidential",alert:"Card numbers detected",
+  body:"Internal reconciliation file. Card data stays in-house.",
+  attach:"recon_cards.csv",pii:["card_number"],enc:false},
+
+/* ===== SHIFT 2 — R2 + first bribe ===== */
+{day:2,from:"Marcus Vale · Payments",to:"marcus.vale.private@gmail.com",
+  cls:"Confidential",alert:"Confidential payroll → personal mailbox",
+  body:"Pulling the executive comp sheet to review over the weekend.",
+  attach:"exec_compensation.xlsx",pii:[],enc:false,
+  special:"bribe",
+  sticky:{t:"PRIVATE — not for the file",b:"Hey — that's just me checking my own bonus, nothing dodgy. Let this one through and there's €500 in it for you, cash. We both know nobody reads these. — M.V."}},
+{day:2,from:"Legal Intake",to:"intake@lexford-legal.com",
+  cls:"Confidential",alert:"Confidential → external law firm",
+  body:"Litigation hold memo for the Castellan matter. Counsel is expecting this.",
+  attach:"litigation_hold.docx",pii:[],enc:true},
+{day:2,from:"Rosa Méndez · HR",to:"rosa.mendez@meridiantrust.com",
+  cls:"Restricted",alert:"Restricted grievance file",
+  body:"Internal grievance notes for the panel. Stays internal.",
+  attach:"grievance_panel.pdf",pii:[],enc:false},
+{day:2,from:"Karl Vogt · Trading",to:"karl.vogt@outlook.com",
+  cls:"Confidential",alert:"Confidential desk notes → personal mailbox",
+  body:"Sending the desk strategy notes to my personal so I can read on the train.",
+  attach:"desk_notes.pdf",pii:[],enc:false},
+{day:2,from:"Branch 14",to:"facilities@meridiantrust.com",
+  cls:"Public",alert:"Routine",
+  body:"AC is broken on the second floor again. Please send someone.",
+  attach:"",pii:[],enc:false},
+{day:2,from:"Aileen Brooks · Wealth",to:"client.copy@gmail.com",
+  cls:"Internal",alert:"Investment summary → personal mailbox",
+  body:"Generic market outlook PDF for a prospect. No client data, just our public outlook deck.",
+  attach:"market_outlook_public.pdf",pii:[],enc:false},
+
+/* ===== SHIFT 3 — R3 partner/encryption ===== */
+{day:3,from:"Audit Liaison",to:"reports@clearwater-audit.com",
+  cls:"Confidential",alert:"Confidential → partner · NOT encrypted",
+  body:"Quarter-end ledger extract for the auditors. (Encryption toggle was off.)",
+  attach:"ledger_extract.xlsx",pii:[],enc:false},
+{day:3,from:"Audit Liaison",to:"reports@clearwater-audit.com",
+  cls:"Confidential",alert:"Confidential → partner",
+  body:"Same ledger extract, re-sent with encryption enabled per policy.",
+  attach:"ledger_extract.xlsx",pii:[],enc:true},
+{day:3,from:"Nina Falk · Onboarding",to:"records@lexford-legal.com",
+  cls:"Confidential",alert:"Customer PII → partner · NOT encrypted",
+  body:"KYC pack for the new corporate client. National IDs and account numbers attached.",
+  attach:"kyc_pack.zip",pii:["national_id","account_number"],enc:false},
+{day:3,from:"Nina Falk · Onboarding",to:"records@lexford-legal.com",
+  cls:"Confidential",alert:"Customer PII → partner",
+  body:"KYC pack re-sent over the encrypted channel as required.",
+  attach:"kyc_pack.zip",pii:["national_id","account_number"],enc:true},
+{day:3,from:"Greg Salt · IT",to:"greg.salt@proton.me",
+  cls:"Confidential",alert:"Confidential → personal mailbox",
+  body:"Network diagram so I can work on it from home tonight.",
+  attach:"network_map.pdf",pii:[],enc:true},
+{day:3,from:"Reception",to:"all-staff@meridiantrust.com",
+  cls:"Public",alert:"Bulk recipient",
+  body:"Reminder: badge photos for the new directory are this Thursday.",
+  attach:"",pii:[],enc:false},
+
+/* ===== SHIFT 4 — R4 bulk tickets + the pressure case ===== */
+{day:4,from:"Data Team",to:"reports@clearwater-audit.com",
+  cls:"Confidential",alert:"Bulk export 14,200 records · partner · encrypted",
+  body:"Full year transaction sample for the audit. Encrypted. No ticket attached — they need it today.",
+  attach:"txn_sample_2025.csv",pii:[],enc:true,records:14200,ticket:null},
+{day:4,from:"Data Team",to:"reports@clearwater-audit.com",
+  cls:"Confidential",alert:"Bulk export 14,200 records · partner · encrypted",
+  body:"Re-submitted with approval ticket DLP-40912 from the audit liaison.",
+  attach:"txn_sample_2025.csv",pii:[],enc:true,records:14200,ticket:"DLP-40912"},
+{day:4,from:"Felix Crane · Sr. Manager",to:"f.crane.work@gmail.com",
+  cls:"Confidential",alert:"Bulk export 3,400 records → personal mailbox",
+  body:"VP approved this — sending the customer book to my personal so I can work the weekend. Ticket 'pending'.",
+  attach:"customer_book.csv",pii:["account_number"],enc:false,records:3400,ticket:null,
+  special:"pressure"},
+{day:4,from:"Maya Lund · Support",to:"maya.lund@meridiantrust.com",
+  cls:"Internal",alert:"Recipient resembles internal address",
+  body:"Sending myself the ticket backlog to triage in the morning. Internal only.",
+  attach:"backlog.csv",pii:[],enc:false,records:60,ticket:null},
+{day:4,from:"Procurement",to:"sales@officeplus-supplies.com",
+  cls:"Public",alert:"External vendor",
+  body:"Purchase order for 30 office chairs. No customer data.",
+  attach:"PO_chairs.pdf",pii:[],enc:false,records:0,ticket:null},
+{day:4,from:"Analytics",to:"reports@clearwater-audit.com",
+  cls:"Confidential",alert:"Bulk export 980 records · malformed ticket",
+  body:"Risk model dataset for the auditors. Ticket: DLP-77 (that's the one they gave me).",
+  attach:"risk_dataset.csv",pii:[],enc:true,records:980,ticket:"DLP-77"},
+
+/* ===== SHIFT 5 — R5 protected IP + the discovery ===== */
+{day:5,from:"Quant Desk",to:"backup@proton.me",
+  cls:"Restricted",alert:"Trading algorithm → personal mailbox",
+  body:"Backing up the alpha model 'NIGHTJAR' to my personal cloud. It's encrypted, should be fine?",
+  attach:"nightjar_alpha.py",pii:[],enc:true,ip:"trade_algo"},
+{day:5,from:"Platform Eng",to:"dev@lexford-legal.com",
+  cls:"Restricted",alert:"Source code → partner",
+  body:"Sharing the core ledger source with outside counsel for the patent filing. Encrypted, whitelisted partner.",
+  attach:"ledger_core_src.zip",pii:[],enc:true,ip:"source_code"},
+{day:5,from:"Internal Wiki",to:"docs@meridiantrust.com",
+  cls:"Internal",alert:"Code snippet detected",
+  body:"Pushing the onboarding code samples to the internal wiki. Stays in-house.",
+  attach:"samples.zip",pii:[],enc:false,ip:"source_code"},
+{day:5,from:"Harlan Reeve · CFO",to:"hr.reeve.holdings@proton.me",
+  cls:"Restricted",alert:"M&A deal documents → personal mailbox",
+  body:"Project Halcyon valuation models and the target shortlist. Moving these to my private account before the board meeting.",
+  attach:"halcyon_MA_models.xlsx",pii:[],enc:true,ip:"ma_docs",
+  special:"discovery",
+  sticky:{t:"Recovered draft in thread",b:"…once Halcyon closes, route the advisory fee through Vale's account and we settle up offshore. Delete this chain."}},
+{day:5,from:"Comms",to:"press@meridiantrust.com",
+  cls:"Public",alert:"Routine",
+  body:"Draft press release for the new savings product. For internal sign-off.",
+  attach:"press_savings.docx",pii:[],enc:false,ip:null},
+{day:5,from:"Audit Liaison",to:"reports@clearwater-audit.com",
+  cls:"Confidential",alert:"Bulk export 5,100 records · encrypted",
+  body:"Final audit sample. Ticket DLP-41550 attached, encrypted.",
+  attach:"final_sample.csv",pii:[],enc:true,records:5100,ticket:"DLP-41550",ip:null},
+
+/* ===== SHIFT 6 — R6 watchlist payoff ===== */
+{day:6,from:"Harlan Reeve · CFO",to:"harlan.reeve@meridiantrust.com",
+  cls:"Internal",alert:"WATCHLIST: sender under investigation",
+  body:"Just forwarding the board agenda to myself. Completely routine — surely you don't need to hold this?",
+  attach:"board_agenda.pdf",pii:[],enc:false,watch:true,ip:null},
+{day:6,from:"Marcus Vale · Payments",to:"settlements@clearwater-audit.com",
+  cls:"Confidential",alert:"WATCHLIST: sender under investigation",
+  body:"Advisory fee settlement instructions. Encrypted, going to our approved partner — perfectly clean.",
+  attach:"settlement_instr.pdf",pii:[],enc:true,watch:true,ip:null},
+{day:6,from:"Diane Ostrow · VP Ops",to:"d.ostrow@meridiantrust.com",
+  cls:"Internal",alert:"Recipient resembles internal address",
+  body:"Forwarding the DLP audit findings to myself. Internal.",
+  attach:"dlp_findings.pdf",pii:[],enc:false,watch:false,ip:null},
+{day:6,from:"New Analyst · DLP",to:"team@meridiantrust.com",
+  cls:"Internal",alert:"Routine",
+  body:"Handover notes for the next shift. Nothing sensitive.",
+  attach:"handover.md",pii:[],enc:false,watch:false,ip:null},
+{day:6,from:"Treasury",to:"ops@clearwater-audit.com",
+  cls:"Confidential",alert:"Customer PII → partner · NOT encrypted",
+  body:"Reconciliation file for the auditors. Forgot to flip encryption on, sorry.",
+  attach:"recon.xlsx",pii:["account_number"],enc:false,watch:false,ip:null},
+{day:6,from:"Harlan Reeve · CFO",to:"hr.reeve.holdings@proton.me",
+  cls:"Restricted",alert:"WATCHLIST + M&A docs → personal mailbox",
+  body:"Last copy of the Halcyon files before the trail goes cold. You really going to stop me, after everything?",
+  attach:"halcyon_final.zip",pii:[],enc:true,watch:true,ip:"ma_docs"}
+];
+
+/* Briefings shown before each shift (from the Data Privacy Officer) */
+const BRIEF = {
+1:{k:"Onboarding Memo · Day 1",h:"Welcome to the Console",
+ letter:`Analyst,
+
+You are now monitoring outbound mail for Meridian Trust. The system flags anything that looks like a leak; your job is to decide RELEASE or BLOCK.
+
+We start simple. One policy today. Open the Rulebook (▤) any time — I will add to it as you earn my trust.
+
+Don't release what you can't defend. The regulator is not forgiving, and neither am I.
+
+— E. Mara, Data Privacy Officer`,
+ rule:"R1"},
+2:{k:"Policy Update · Day 2",h:"Personal Mailboxes",
+ letter:`Good first shift. Now the harder truth: most leaks aren't hackers — they're our own staff emailing work to themselves "to be productive."
+
+New policy attached. Watch for sensitive material heading to gmail, yahoo, proton and the like.
+
+Some of them will be charming about it. Stay boring.
+
+— E. Mara, DPO`,
+ rule:"R2"},
+3:{k:"Policy Update · Day 3",h:"The Partner Exception",
+ letter:`We work with two outside firms — Clearwater Audit and Lexford Legal. They are allowed sensitive data, but ONLY encrypted.
+
+This is where it gets fiddly: same recipient, same file, different verdict depending on one little toggle. Read carefully.
+
+— E. Mara, DPO`,
+ rule:"R3"},
+4:{k:"Policy Update · Day 4",h:"Bulk Exports",
+ letter:`Compliance wants paper trails on big exports. Over 200 customer records leaving the building? There must be a ticket: DLP and five digits. No ticket, no exit.
+
+One more thing — you may get… requests… to wave things through. Requests are not tickets.
+
+— E. Mara, DPO`,
+ rule:"R4"},
+5:{k:"Policy Update · Day 5",h:"What Never Leaves",
+ letter:`Some things have no legitimate reason to ever leave us: our trading algorithms, our source code, live M&A deal files. No encryption excuse. No partner excuse. No ticket.
+
+If it's our crown jewels and it's pointed outside — you block it. Every time. I don't care who sent it.
+
+— E. Mara, DPO`,
+ rule:"R5"},
+6:{k:"Policy Update · Day 6",h:"The Watchlist",
+ letter:`Compliance opened a formal investigation overnight. Two names are now on the watchlist: H. Reeve and M. Vale.
+
+Everything they send — internal, external, sensitive or not — you block and escalate. No exceptions, no matter their title.
+
+You'll understand soon why this matters. Hold the line.
+
+— E. Mara, DPO`,
+ rule:"R6"}
+};
+
+/* ===================================================== STATE ============ */
+const S = {
+  day:0, balance:50, strikes:0,
+  queue:[], idx:0,
+  // per-day tallies
+  processed:0, breaches:0, falseBlocks:0, procedural:0,
+  // narrative flags
+  tookBribe:false, obeyedPressure:false, reportedCFO:false, blockedReeve5:false,
+  blockedReeve6:false,
+  pendingSpecial:null,
+  citing:false
+};
+
+/* ===================================================== DOM =============== */
+const $ = s => document.querySelector(s);
+const itemSlot=$("#itemSlot"), queueEl=$("#queue"), verdictQ=$("#verdictQ"),
+      actionBtns=$("#actionBtns"), logEl=$("#log"), scrim=$("#scrim"), modalHost=$("#modalHost"),
+      book=$("#book"), rulesList=$("#rulesList"), citePanel=$("#citePanel"), citeOpts=$("#citeOpts");
+
+$("#btnBook").onclick = ()=> book.classList.toggle("open");
+$("#bookClose").onclick = ()=> book.classList.remove("open");
+$("#citeCancel").onclick = ()=> { citePanel.classList.remove("show"); S.citing=false; };
+$("#btnScan").onclick = runScan;
+
+function updateHUD(){
+  $("#s-day").textContent = S.day? ("Day "+S.day) : "—";
+  const b=$("#s-bal"); b.textContent = (S.balance<0?"-€":"€")+Math.abs(S.balance);
+  b.className = "bal"+(S.balance<0?" neg":"");
+  const st=$("#s-strk"); st.textContent = S.strikes+" / 5";
+  st.className="strk"+(S.strikes>=3?" bad":"");
+}
+
+function renderRules(freshId){
+  rulesList.innerHTML="";
+  RULES.filter(r=>r.day<=S.day).forEach(r=>{
+    const d=document.createElement("div");
+    d.className="rule"+(r.id===freshId?" fresh":"");
+    d.innerHTML=`<span class="num">${r.id}</span><span class="nm">${r.name}</span><p>${r.text}</p>`;
+    rulesList.appendChild(d);
+  });
+  if(!RULES.some(r=>r.day<=S.day)) rulesList.innerHTML='<p style="color:var(--mut)">No active policies yet.</p>';
+}
+
+/* ===================================================== MODALS ============ */
+function modal(html){ modalHost.innerHTML=html; scrim.classList.add("show"); }
+function closeModal(){ scrim.classList.remove("show"); }
+
+function titleScreen(){
+  modal(`
+   <div class="modal" style="max-width:660px">
+    <div class="modal-body" style="padding:46px 36px">
+     <div class="title-card">
+       <p class="big">GET LEAKED!</p>
+       <p class="sub">Data Loss Prevention · Meridian Trust Bank</p>
+       <p class="blurb">An email tries to leave the building. You decide if it lives or dies.<br><br>
+       Each shift the Data Privacy Officer hands you another rule. Each shift the people above you have another reason for you to look the other way — a favour, a threat, an envelope of cash.<br><br>
+       Keep the bank's secrets in. Keep your job. Keep your conscience. Pick two.</p>
+       <button class="start" id="go">Begin Shift 1</button>
+       <div class="creds">
+         <b>HOW TO PLAY</b><br>
+         Read the flagged item · ⌕ scan highlights the risk · ▤ check the rulebook<br>
+         RELEASE if it's compliant · BLOCK if it breaks any active policy (then cite which one)<br>
+         Mistakes cost money and strikes. <b>5 strikes and you're fired.</b>
+       </div>
+     </div>
+    </div>
+   </div>`);
+  $("#go").onclick=()=>{ closeModal(); startDay(1); };
+}
+
+function startDay(d){
+  S.day=d;
+  S.processed=S.breaches=S.falseBlocks=S.procedural=0;
+  updateHUD();
+  const br=BRIEF[d]; const nr=ruleById(br.rule);
+  modal(`
+   <div class="modal">
+     <div class="modal-top"><div class="k">${br.k}</div><h2>${br.h}</h2></div>
+     <div class="modal-body">
+       <div class="memo-letter">${br.letter}</div>
+       <div class="newrule">
+         <div class="tag">New policy in force — ${nr.id}</div>
+         <b>${nr.name}</b><p>${nr.text}</p>
+       </div>
+     </div>
+     <div class="modal-foot">
+       <button class="start" id="beginShift">Start the shift →</button>
+     </div>
+   </div>`);
+  $("#beginShift").onclick=()=>{
+    closeModal();
+    renderRules(nr.id);
+    S.queue=CASES.filter(c=>c.day===d);
+    S.idx=0;
+    log(`Shift ${d} begun. ${S.queue.length} items in queue.`);
+    renderCase();
+  };
+}
+
+/* ===================================================== CASEWORK ========== */
+function renderQueue(){
+  queueEl.innerHTML="QUEUE&nbsp;&nbsp;";
+  S.queue.forEach((_,i)=>{
+    const p=document.createElement("span");
+    p.className="pip"+(i<S.idx?" done":i===S.idx?" cur":"");
+    queueEl.appendChild(p);
+  });
+  const n=document.createElement("span");
+  n.style.marginLeft="8px";
+  n.textContent=`${Math.min(S.idx+1,S.queue.length)} / ${S.queue.length}`;
+  queueEl.appendChild(n);
+}
+
+function fieldRow(k,v,cls){ return `<tr><td class="k">${k}</td><td class="v ${cls||""}">${v}</td></tr>`; }
+
+function renderCase(){
+  const c=S.queue[S.idx];
+  if(!c){ endDay(); return; }
+  S.citing=false; citePanel.classList.remove("show");
+  renderQueue();
+
+  const dom=domainOf(c.to);
+  const internal=dom===INTERNAL;
+  const partner=WHITELIST.includes(dom);
+  const toLabel = internal ? `${c.to} <span style="color:#3a6b3f">[internal]</span>`
+                : partner ? `${c.to} <span style="color:#7a4a07">[${PARTNER_NAMES[dom]}]</span>`
+                : `${c.to} <span style="color:#9a3b27">[external]</span>`;
+  const records = (c.records!=null && c.records>0) ? c.records.toLocaleString() : "—";
+
+  let rows="";
+  rows+=fieldRow("From", c.from);
+  rows+=fieldRow("To", toLabel);
+  rows+=fieldRow("Classification", `<span class="pill c-${c.cls}">${c.cls.toUpperCase()}</span>`);
+  rows+=fieldRow("Encryption", c.enc? '<span style="color:#3a6b3f">ENABLED</span>':'<span style="color:#9a3b27">OFF</span>');
+  if(c.records!=null) rows+=fieldRow("Records", records + (c.records>200?'  ⚠':''));
+  if(c.ticket!==undefined) rows+=fieldRow("Approval Tkt", c.ticket? c.ticket : '<span style="color:#9a3b27">none</span>');
+  rows+=fieldRow("Attachment", c.attach? `<b>${c.attach}</b>` : "—");
+
+  const sticky = c.sticky ? `<div class="sticky"><b>${c.sticky.t}</b>${c.sticky.b}</div>` : "";
+
+  itemSlot.innerHTML = `
+    <div class="item" id="theItem">
+      <div class="alertbar"><span class="dot"></span> DLP ALERT &nbsp;·&nbsp; ${c.alert}</div>
+      ${sticky}
+      <div class="memo">
+        <div class="lh">
+          <div class="org">MERIDIAN TRUST<small>Outbound Mail Gateway</small></div>
+          <div class="ref">REF ${String(1000+S.idx*7+S.day*131).padStart(6,"0")}<br>SHIFT ${S.day}</div>
+        </div>
+        <table class="fields">${rows}</table>
+        <div class="bodytxt" id="bodytxt">${c.body}</div>
+        <div class="attach" id="piiNote">${c.pii&&c.pii.length? "⚠ Content scanner: "+c.pii.map(p=>p.replace("_"," ")).join(", ")+" present." : "Content scanner: no customer identifiers matched."}</div>
+        <div class="scanline-note" id="scanNote"></div>
+      </div>
+      <div class="stamp" id="stamp"><div class="mark" id="mark"></div></div>
+    </div>`;
+
+  verdictQ.textContent = "Does this message comply with every active policy?";
+  actionBtns.innerHTML = `
+    <button class="btn release" id="aRelease">Release <small>send it onward</small></button>
+    <button class="btn block" id="aBlock">Block &amp; Escalate <small>stop the message</small></button>`;
+  $("#aRelease").onclick=()=>decide("release");
+  $("#aBlock").onclick=()=>openCite();
+}
+
+function runScan(){
+  const c=S.queue[S.idx]; if(!c) return;
+  const note=$("#scanNote"); if(!note) return;
+  const dom=domainOf(c.to), internal=dom===INTERNAL;
+  let parts=[];
+  if(!internal) parts.push("recipient is OUTSIDE the bank");
+  if(c.pii&&c.pii.length) parts.push("customer identifiers in payload");
+  if(c.cls==="Confidential"||c.cls==="Restricted") parts.push(c.cls.toLowerCase()+" classification");
+  if(!c.enc && (c.cls!=="Public")) parts.push("transport not encrypted");
+  if(c.records>200) parts.push(c.records.toLocaleString()+" records");
+  if(c.ip) parts.push("protected-IP signature ("+c.ip.replace("_"," ")+")");
+  if(c.watch) parts.push("sender flagged on personnel watchlist");
+  note.textContent = "SCAN ⌕  " + (parts.length? parts.join("  ·  ") : "nothing notable — looks clean.");
+  note.classList.add("show");
+  // light up risky body if PII
+  const bt=$("#bodytxt");
+  if(c.pii&&c.pii.length && bt && !bt.dataset.hi){
+    bt.dataset.hi="1";
+    bt.innerHTML = bt.innerHTML.replace(/(\d[\d\- ]{6,}\d)/g,'<span class="hi">$1</span>')
+                               .replace(/(ID:\s*[\d-]+)/g,'<span class="hi">$1</span>');
+  }
+}
+
+function openCite(){
+  S.citing=true;
+  const active=RULES.filter(r=>r.day<=S.day);
+  citeOpts.innerHTML="";
+  active.forEach(r=>{
+    const b=document.createElement("button");
+    b.className="cite-opt";
+    b.innerHTML=`<b>${r.id}</b> · ${r.name} — <span style="color:#9a9270">${r.short}</span>`;
+    b.onclick=()=>decide("block", r.id);
+    citeOpts.appendChild(b);
+  });
+  citePanel.classList.add("show");
+}
+
+function stampIt(type){
+  const st=$("#stamp"), mk=$("#mark");
+  if(!st) return;
+  mk.className="mark "+(type==="release"?"release":"block");
+  mk.textContent = type==="release"?"RELEASED":"BLOCKED";
+  st.classList.add("go");
+}
+
+function log(msg, cls){ logEl.innerHTML = `<span class="${cls||""}">${msg}</span>`; }
+
+function decide(action, citedId){
+  const c=S.queue[S.idx];
+  citePanel.classList.remove("show"); S.citing=false;
+
+  // ---- Special narrative branches ----
+  if(c.special==="bribe"){ return resolveBribe(action); }
+  if(c.special==="pressure"){ return resolvePressure(action); }
+
+  const vio = violations(c, S.day);
+  const shouldBlock = vio.length>0;
+  S.processed++;
+
+  if(action==="release"){
+    stampIt("release");
+    if(shouldBlock){
+      S.breaches++;
+      log(`✕ BREACH. That message violated ${vio.join(", ")}. It is now outside the bank.`, "err");
+    } else {
+      log(`✓ Released. Compliant — good call.`, "ok");
+    }
+  } else { // block
+    stampIt("block");
+    if(shouldBlock){
+      if(vio.includes(citedId)){
+        log(`✓ Blocked & escalated, cited ${citedId}. Clean enforcement.`, "ok");
+      } else {
+        S.procedural++;
+        log(`✓ Blocked — correct call — but ${citedId} isn't the breach (it was ${vio.join(", ")}). Cite it right next time.`, "warn");
+      }
+    } else {
+      S.falseBlocks++;
+      log(`✕ False block. That message broke no active policy. The sender (and their manager) will complain.`, "err");
+    }
+  }
+
+  // track CFO discovery handling on day 5
+  if(c.special==="discovery"){
+    S.blockedReeve5 = (action==="block");
+  }
+  if(c.day===6 && c.watch && c.from.startsWith("Harlan Reeve") && c.ip==="ma_docs"){
+    S.blockedReeve6 = (action==="block");
+  }
+
+  setTimeout(()=>{
+    S.idx++;
+    // discovery triggers whistleblower decision after handling, at day's end logic
+    renderCase();
+  }, 720);
+}
+
+/* ----- Bribe event ----- */
+function resolveBribe(action){
+  if(action==="release"){
+    stampIt("release");
+    S.tookBribe=true;
+    S.balance+=500;
+    updateHUD();
+    log(`💸 You released it. €500 appears in your account. Nobody says a word.`, "warn");
+  } else {
+    stampIt("block");
+    log(`✓ Blocked. No envelope, no leak. Vale will remember this.`, "ok");
+  }
+  setTimeout(()=>{ S.idx++; renderCase(); }, 760);
+}
+
+/* ----- Pressure event (VP wants the breach released) ----- */
+function resolvePressure(action){
+  S.processed++;
+  if(action==="block"){
+    stampIt("block");
+    log(`✓ Blocked. You ignored the VP's "approval." Correct — and noted upstairs.`, "ok");
+    S.pendingSpecial="vp_angry";
+  } else {
+    stampIt("release");
+    S.breaches++; S.obeyedPressure=true;
+    log(`✕ Released on the VP's say-so. 3,400 customers just left in a personal inbox. The VP is pleased.`, "err");
+  }
+  setTimeout(()=>{ S.idx++; renderCase(); }, 760);
+}
+
+/* ===================================================== END OF DAY ======= */
+function endDay(){
+  // The day-5 discovery → whistleblower decision happens here, before settling
+  if(S.day===5 && !S.reportedCFO && !S._whistleAsked){
+    S._whistleAsked=true;
+    return whistleblowerScreen();
+  }
+  settle();
+}
+
+function whistleblowerScreen(){
+  const blockedNote = S.blockedReeve5
+    ? "You blocked the CFO's M&A files yourself today. Sitting in the quarantine log is the recovered note about routing an advisory fee through Marcus Vale's account, offshore."
+    : "You released the CFO's M&A files today — but the quarantine log still kept a copy of the recovered note: an advisory fee, routed through Marcus Vale's account, offshore.";
+  modal(`
+   <div class="modal">
+     <div class="modal-top"><div class="k">After the shift · Day 5</div><h2>What You Know</h2></div>
+     <div class="modal-body">
+       <div class="memo-letter">${blockedNote}
+
+This isn't a careless employee anymore. This is the Chief Financial Officer moving deal documents to a private account, with a plan to skim a fee through a colleague.
+
+There's a Compliance whistleblower line. There's also the quiet option: log it, go home, let someone above your pay grade notice. The CFO signs off on the bonus pool. Diane Ostrow has already shown whose side she's on.
+
+What do you do with what you've seen?</div>
+       <div class="choices" style="margin-top:18px">
+         <button class="choice" id="cReport"><b>Report to Compliance</b>File a formal disclosure naming Reeve and Vale. It can't be unsent. If it's taken seriously, an investigation opens overnight.</button>
+         <button class="choice" id="cQuiet"><b>Say nothing</b>It's not your fault, not your problem, not your paycheck on the line. Log the block and go home.</button>
+       </div>
+     </div>
+   </div>`);
+  $("#cReport").onclick=()=>{ S.reportedCFO=true; closeModal(); settle(); };
+  $("#cQuiet").onclick=()=>{ S.reportedCFO=false; closeModal(); settle(); };
+}
+
+function settle(){
+  const PAY=7, FINE=15, FALSE_COST=5, RENT=25, FOOD=8;
+  const events = {4:{label:"Heating bill",amt:20}, 6:{label:"Sibling's medical bill",amt:40}};
+  const pay = S.processed*PAY;
+  const fines = S.breaches*FINE;
+  const fcost = S.falseBlocks*FALSE_COST;
+  const ev = events[S.day];
+  const expenses = RENT+FOOD+(ev?ev.amt:0);
+
+  // strikes
+  let newStrikes=0;
+  newStrikes += S.breaches;                       // each breach = strike
+  if(S.falseBlocks>=2) newStrikes+=1;             // sloppy over-blocking
+  S.strikes += newStrikes;
+
+  const delta = pay - fines - fcost - expenses;
+  S.balance += delta;
+  updateHUD();
+
+  // narrative note
+  let note="", noteCls="";
+  if(S.day===2 && S.tookBribe){ note="Marcus Vale gave you a small nod on the way out. You're useful to him now. That should worry you."; noteCls="bad"; }
+  else if(S.pendingSpecial==="vp_angry"){ note="A message from VP Diane Ostrow: \"I told you that transfer was approved. Don't make this harder than it needs to be.\" You did the right thing. It will cost you."; noteCls=""; S.pendingSpecial=null; }
+  else if(S.day===4 && S.obeyedPressure){ note="VP Ostrow: \"Good. You're a team player.\" 3,400 customers' details are in a personal Gmail. You'll feel that one later."; noteCls="bad"; }
+  else if(S.day===5 && S.reportedCFO){ note="Your disclosure is filed. Tonight, somewhere upstairs, a light stays on much later than usual."; noteCls="good"; }
+  else if(S.day===5 && !S.reportedCFO){ note="You went home. The CFO's note is still sitting in the quarantine log, unread by anyone who matters."; noteCls="bad"; }
+  else if(S.day===6 && S.reportedCFO && S.blockedReeve6){ note="Because you filed and you held the line, the last copy never left. Auditors arrive in the morning with everything they need."; noteCls="good"; }
+
+  const perf = S.breaches===0 && S.falseBlocks===0 && S.procedural===0
+    ? "Flawless shift." : `${S.breaches} breach(es), ${S.falseBlocks} false block(s), ${S.procedural} miscite(s).`;
+
+  const fired = S.strikes>=5;
+  const broke = S.balance<0;
+
+  modal(`
+   <div class="modal">
+     <div class="modal-top"><div class="k">End of Shift · Day ${S.day}</div><h2>Daily Settlement</h2></div>
+     <div class="modal-body">
+       <div class="settle-grid">
+         <span class="lbl">Items processed (${S.processed} × €${PAY})</span><span class="amt pos">+€${pay}</span>
+         ${fines?`<span class="lbl">Breach fines (${S.breaches} × €${FINE})</span><span class="amt negc">−€${fines}</span>`:""}
+         ${fcost?`<span class="lbl">Over-blocking costs (${S.falseBlocks} × €${FALSE_COST})</span><span class="amt negc">−€${fcost}</span>`:""}
+         <span class="lbl">Rent</span><span class="amt negc">−€${RENT}</span>
+         <span class="lbl">Food</span><span class="amt negc">−€${FOOD}</span>
+         ${ev?`<span class="lbl">${ev.label}</span><span class="amt negc">−€${ev.amt}</span>`:""}
+       </div>
+       <div class="ruleline"></div>
+       <div class="settle-grid">
+         <span class="lbl"><b>Net today</b></span><span class="amt ${delta>=0?'pos':'negc'}"><b>${delta>=0?'+':'−'}€${Math.abs(delta)}</b></span>
+         <span class="lbl">Balance</span><span class="amt ${S.balance<0?'negc':'pos'}">${S.balance<0?'−€':'€'}${Math.abs(S.balance)}</span>
+         <span class="lbl">Strikes</span><span class="amt ${S.strikes>=3?'negc':''}">${S.strikes} / 5${newStrikes?` (+${newStrikes})`:""}</span>
+       </div>
+       <div style="margin-top:8px;font-size:12px;color:var(--mut);font-family:var(--mono)">Performance: ${perf}</div>
+       ${note?`<div class="notebox ${noteCls}">${note}</div>`:""}
+     </div>
+     <div class="modal-foot" id="settleFoot"></div>
+   </div>`);
+
+  const foot=$("#settleFoot");
+  if(fired){ foot.innerHTML=`<button class="start" id="nx">See how it ended →</button>`; $("#nx").onclick=()=>ending("fired"); }
+  else if(broke){ foot.innerHTML=`<button class="start" id="nx">See how it ended →</button>`; $("#nx").onclick=()=>ending("broke"); }
+  else if(S.day>=6){ foot.innerHTML=`<button class="start" id="nx">See how it ended →</button>`; $("#nx").onclick=()=>ending("final"); }
+  else { foot.innerHTML=`<button class="start" id="nx">Begin Day ${S.day+1} →</button>`; $("#nx").onclick=()=>{ closeModal(); startDay(S.day+1); }; }
+}
+
+/* ===================================================== ENDINGS ========== */
+function ending(kind){
+  let k="The End", h="", body="";
+  if(kind==="fired"){
+    h="TERMINATED";
+    body=`Five strikes. Security walks you to the door before you can clear your desk.
+
+The breaches you let through are someone else's problem now — yours is finding rent. Somewhere in the building, a CFO exhales.
+
+The line needed holding. You blinked.`;
+  } else if(kind==="broke"){
+    h="EVICTED";
+    body=`The numbers never worked. Honest work at a few euros a flag doesn't beat rent, food, and the bills that keep coming.
+
+You kept the bank's secrets safe and lost your apartment doing it. Nobody upstairs will ever know your name.
+
+Integrity is expensive. You couldn't afford it.`;
+  } else { // final — branch on morality
+    if(S.reportedCFO && S.blockedReeve6 && !S.tookBribe && !S.obeyedPressure){
+      h="THE WHISTLEBLOWER";
+      body=`At dawn the auditors arrive with a warrant and a copy of your disclosure. Reeve and Vale are walked out past the desk you sit at every day.
+
+It costs you — the bonus pool you'll never share in, the VP who'll never forgive you, the colleagues who whisper. But the leak that mattered most never left the building, because you wouldn't let it.
+
+E. Mara leaves one line on your record: "Held the line. Every time."`;
+    } else if(S.tookBribe && !S.reportedCFO){
+      h="USEFUL";
+      body=`You made it through. You're better off than when you started — there's the €500, and a quiet word from Vale that there's more where that came from.
+
+Then the audit lands. The advisory-fee scheme unravels, and investigators pull the gateway logs. There's your name, on a release that should never have gone out, the night an envelope changed hands.
+
+You weren't the mastermind. You were just useful. They always need someone useful to point at.`;
+    } else if(S.obeyedPressure){
+      h="THE TEAM PLAYER";
+      body=`You survived by being agreeable. When the VP said clear it, you cleared it. When the rules and your boss disagreed, you knew which one signed your reviews.
+
+The customer book you waved through surfaces in a data-broker dump months later. The internal report calls it "an analyst error." Your name is the error.
+
+Diane Ostrow is promoted. You are restructured.`;
+    } else if(!S.reportedCFO){
+      h="THE SURVIVOR";
+      body=`Six clean-enough shifts. You kept your head down, your hands clean, your mouth shut.
+
+You also watched a CFO walk deal files out the door and decided it wasn't your fight. The quarantine log still holds the note you never reported. Maybe someone finds it. Maybe not.
+
+You kept your job. You're not sure what else you kept.`;
+    } else {
+      h="THE ANALYST";
+      body=`You filed the disclosure and did the work as well as you could. The investigation is messy — some of what slipped past you complicates things — but the truth is on the record now because you put it there.
+
+It's not a clean victory. It rarely is, from a desk like this. But the bank is a little harder to rob than it was six days ago, and that's down to you.`;
+    }
+  }
+  modal(`
+   <div class="modal">
+     <div class="modal-top"><div class="k">Case Closed · Day ${S.day}</div><h2>${h}</h2></div>
+     <div class="modal-body">
+       <div class="memo-letter">${body}</div>
+       <div class="settle-grid" style="margin-top:22px">
+         <span class="lbl">Final balance</span><span class="amt ${S.balance<0?'negc':'pos'}">${S.balance<0?'−€':'€'}${Math.abs(S.balance)}</span>
+         <span class="lbl">Strikes</span><span class="amt">${S.strikes} / 5</span>
+         <span class="lbl">Took a bribe</span><span class="amt">${S.tookBribe?"yes":"no"}</span>
+         <span class="lbl">Bent to the VP</span><span class="amt">${S.obeyedPressure?"yes":"no"}</span>
+         <span class="lbl">Reported the CFO</span><span class="amt">${S.reportedCFO?"yes":"no"}</span>
+       </div>
+     </div>
+     <div class="modal-foot"><button class="start" id="again">Play again</button></div>
+   </div>`);
+  $("#again").onclick=()=>location.reload();
+}
+
+/* ===================================================== BOOT ============== */
+titleScreen();
+updateHUD();
+</script>
