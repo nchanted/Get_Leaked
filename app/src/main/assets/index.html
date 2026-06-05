@@ -165,6 +165,16 @@
   .toolrow{display:flex;gap:10px;margin-bottom:14px}
   .toolrow .btn{flex:1;justify-content:center}
 
+  /* save toast */
+  .toast{
+    position:fixed;left:50%;bottom:18px;transform:translateX(-50%) translateY(8px);
+    background:#2e2614;color:#f1e6c9;font-family:var(--cond);letter-spacing:.08em;
+    font-size:12px;padding:8px 16px;border-radius:5px;border:1px solid #4a3f23;
+    box-shadow:0 8px 24px rgba(40,30,10,.4);opacity:0;pointer-events:none;text-transform:uppercase;
+    transition:opacity .2s,transform .2s;z-index:70;
+  }
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
   /* citation panel */
   .cite{margin-top:14px;border-top:1px dashed var(--line);padding-top:12px;display:none}
   .cite.show{display:block;animation:fade .2s}
@@ -241,12 +251,73 @@
   .choice:hover{border-color:var(--ochre);background:#efe1bf}
   .choice b{color:var(--ochre);font-family:var(--cond);letter-spacing:.06em;display:block;margin-bottom:3px;text-transform:uppercase;font-size:12px}
 
-  @media(max-width:820px){
-    main{grid-template-columns:1fr;grid-template-rows:auto 1fr}
+  /* Narrow PORTRAIT phones: stack the panels. The console (with the decision
+     buttons) is given its own height and made scrollable so the buttons can
+     never be pushed off-screen by a tall item above it. */
+  @media (max-width:820px) and (orientation:portrait){
+    main{grid-template-columns:1fr;grid-template-rows:minmax(110px,1fr) auto}
     .stage{border-right:none;border-bottom:1px solid var(--line)}
-    .console{border-left:none}
+    .console{border-left:none;overflow-y:auto;max-height:58vh}
     .stats{gap:14px}.brand{font-size:14px}
     .title-card .big{font-size:42px}
+  }
+
+  /* LANDSCAPE on phones / any short viewport: keep the two columns side by side
+     and compress everything so the item + decision fit without much scrolling. */
+  @media (orientation:landscape) and (max-height:600px){
+    main{grid-template-columns:1.2fr .92fr}
+    header{padding:5px 12px}
+    .brand{font-size:13px} .brand small{font-size:8px;letter-spacing:.24em}
+    .stats{gap:12px} .stat span{font-size:14px} .stat b{font-size:8px;margin-bottom:1px}
+
+    .stage{padding:9px 12px}
+    .console{padding:9px 12px;overflow-y:auto}
+    .queue{margin-bottom:7px;font-size:9px;gap:6px}
+    .queue .pip{width:7px;height:7px}
+
+    .item{transform:none}
+    .alertbar{padding:4px 10px;font-size:9px;letter-spacing:.1em}
+    .memo{padding:8px 12px 11px}
+    .lh{padding-bottom:6px;margin-bottom:7px}
+    .lh .org{font-size:11px} .lh .ref{font-size:8px}
+    table.fields{font-size:11.5px}
+    table.fields td{padding:1px 0}
+    table.fields td.k{font-size:9px;padding-top:3px;width:92px;letter-spacing:.08em}
+    .bodytxt{margin-top:7px;padding:7px 9px;font-size:11px;line-height:1.35}
+    .attach{margin-top:5px;font-size:10px}
+    .scanline-note{margin-top:6px;font-size:10px}
+    .sticky{width:144px;font-size:10px;line-height:1.3;padding:8px 9px;top:30px}
+    .stamp .mark{font-size:32px;padding:5px 15px;border-width:4px}
+
+    .panel-title{margin-bottom:6px;font-size:10px}
+    .verdict-q{padding:6px 10px;font-size:11.5px;margin-bottom:8px;line-height:1.4}
+    .toolrow{margin-bottom:8px;gap:8px}
+    .toolrow .btn{padding:7px 9px;font-size:11px}
+    .btns{gap:7px}
+    .btn{padding:9px 12px;font-size:13px}
+    .btn small{display:none}
+    .cite{margin-top:8px;padding-top:8px}
+    .cite h4{margin-bottom:6px;font-size:10px}
+    .cite-opt{padding:6px 9px;font-size:10.5px;margin-bottom:5px}
+    .log{padding-top:7px;font-size:10px;min-height:0}
+
+    /* compact modals (briefings, settlement, endings, title) */
+    .scrim{padding:12px}
+    .modal{max-height:94vh}
+    .modal-top{padding:8px 16px} .modal-top h2{font-size:18px;letter-spacing:.06em} .modal-top .k{font-size:9px}
+    .modal-body{padding:12px 16px}
+    .memo-letter{font-size:12px;line-height:1.5}
+    .newrule{margin-top:10px;padding:9px 12px}
+    .newrule b{font-size:13px} .newrule p{font-size:11.5px}
+    .modal-foot{padding:9px 16px}
+    .settle-grid{font-size:12px;gap:4px 14px;margin-bottom:6px}
+    .notebox{margin-top:9px;font-size:12px;line-height:1.45}
+    .choices{gap:7px} .choice{padding:9px 12px;font-size:12px}
+    .title-card .big{font-size:32px;letter-spacing:.12em}
+    .title-card .sub{font-size:9px;letter-spacing:.32em;margin-top:6px}
+    .title-card .blurb{font-size:11.5px;line-height:1.5;margin:12px 0 4px}
+    .title-card .creds, .creds{font-size:9.5px;line-height:1.55;margin-top:10px}
+    .start{padding:10px 26px;font-size:13px;margin-top:12px}
   }
 
 </style>
@@ -272,8 +343,9 @@
       <div class="verdict-q" id="verdictQ">Awaiting intercepted item…</div>
 
       <div class="toolrow">
-        <button class="btn ghost" id="btnScan">⌕ Run DLP Scan</button>
-        <button class="btn ghost" id="btnBook">▤ Rulebook</button>
+        <button class="btn ghost" id="btnScan">⌕ Scan</button>
+        <button class="btn ghost" id="btnBook">▤ Rules</button>
+        <button class="btn ghost" id="btnMenu">☰ Menu</button>
       </div>
 
       <div class="btns" id="actionBtns"></div>
@@ -297,6 +369,9 @@
   </div>
   <div class="rules" id="rulesList"></div>
 </aside>
+
+<!-- Save toast -->
+<div id="toast" class="toast"></div>
 
 <!-- Modal -->
 <div class="scrim" id="scrim"><div id="modalHost"></div></div>
@@ -595,6 +670,7 @@ $("#btnBook").onclick = ()=> book.classList.toggle("open");
 $("#bookClose").onclick = ()=> book.classList.remove("open");
 $("#citeCancel").onclick = ()=> { citePanel.classList.remove("show"); S.citing=false; };
 $("#btnScan").onclick = runScan;
+$("#btnMenu").onclick = openMenu;
 
 function updateHUD(){
   $("#s-day").textContent = S.day? ("Day "+S.day) : "—";
@@ -602,6 +678,143 @@ function updateHUD(){
   b.className = "bal"+(S.balance<0?" neg":"");
   const st=$("#s-strk"); st.textContent = S.strikes+" / 5";
   st.className="strk"+(S.strikes>=3?" bad":"");
+}
+
+/* ===================================================== SAVE SYSTEM ====== */
+const SAVE_KEY = "getleaked.save.v1";
+const Store = {
+  ok:false,
+  init(){ try{ const k="__gl_probe__"; localStorage.setItem(k,"1"); localStorage.removeItem(k); this.ok=true; }catch(e){ this.ok=false; } return this.ok; },
+  get(){ try{ return localStorage.getItem(SAVE_KEY); }catch(e){ return null; } },
+  set(v){ try{ localStorage.setItem(SAVE_KEY,v); return true; }catch(e){ return false; } },
+  del(){ try{ localStorage.removeItem(SAVE_KEY); }catch(e){} }
+};
+Store.init();
+
+const SAVE_FIELDS = ["day","idx","balance","strikes","processed","breaches","falseBlocks",
+  "procedural","tookBribe","obeyedPressure","reportedCFO","blockedReeve5","blockedReeve6",
+  "pendingSpecial","_whistleAsked"];
+
+function snapshot(phase){
+  const o={ game:"getleaked", v:1, phase:phase, ts:Date.now() };
+  SAVE_FIELDS.forEach(f=> o[f]=S[f]);
+  return o;
+}
+function saveGame(phase, announce){
+  S._phase = phase;
+  const data = JSON.stringify(snapshot(phase));
+  S._lastSaveData = data;                 // kept for the backup-code export
+  const okLocal = Store.set(data);
+  if(announce) toast(okLocal ? "Progress saved" : "Saved to backup code");
+}
+function readSave(){
+  const raw = Store.get();
+  if(!raw) return null;
+  try{ const o=JSON.parse(raw); return (o && o.day) ? o : null; }catch(e){ return null; }
+}
+function clearSave(){ Store.del(); S._lastSaveData=null; }
+
+function resetState(){
+  S.day=0; S.balance=50; S.strikes=0; S.queue=[]; S.idx=0;
+  S.processed=S.breaches=S.falseBlocks=S.procedural=0;
+  S.tookBribe=S.obeyedPressure=S.reportedCFO=S.blockedReeve5=S.blockedReeve6=false;
+  S.pendingSpecial=null; S.citing=false; S._whistleAsked=false; S._phase=null; S._lastSaveData=null;
+  updateHUD();
+}
+
+function resumeFrom(o){
+  if(!o) return;
+  SAVE_FIELDS.forEach(f=>{ if(o[f]!==undefined) S[f]=o[f]; });
+  S.citing=false;
+  updateHUD();
+  renderRules();
+  if(o.phase==="briefing"){
+    startDay(S.day);                       // re-show that shift's briefing
+  } else {
+    S.queue = CASES.filter(c=>c.day===S.day);
+    closeModal();
+    book.classList.remove("open");
+    log(`Resumed shift ${S.day}.`);
+    renderCase();                          // drop straight back into casework at S.idx
+  }
+}
+
+let _toastT=null;
+function toast(msg){
+  const t=$("#toast"); if(!t) return;
+  t.textContent=msg; t.classList.add("show");
+  clearTimeout(_toastT);
+  _toastT=setTimeout(()=>t.classList.remove("show"), 1600);
+}
+
+/* ----- Pause / save menu ----- */
+function openMenu(){
+  const inGame = S.day>0;
+  const note = Store.ok
+    ? "Your progress saves automatically after every item and at the start of each shift. Use Continue on the title screen to pick up where you left off."
+    : "Local saving is blocked in this environment, so auto-save is off here. Use the backup code below to keep progress — it works anywhere. In the installed app or the downloaded file, auto-save works normally.";
+  modal(`
+   <div class="modal" style="max-width:560px">
+     <div class="modal-top"><div class="k">Game Menu</div><h2>Paused</h2></div>
+     <div class="modal-body">
+       <div class="memo-letter" style="font-size:13px">${note}</div>
+       <div class="choices" style="margin-top:16px">
+         ${inGame?`<button class="choice" id="mResume"><b>Resume</b>Back to the desk.</button>`:""}
+         ${inGame?`<button class="choice" id="mSaveQuit"><b>Save &amp; quit to title</b>Keep progress and return to the title screen.</button>`:""}
+         <button class="choice" id="mBackup"><b>Backup / restore code</b>Copy a code to save anywhere, or paste one to load.</button>
+         <button class="choice" id="mNew"><b>New game</b>Start over from Shift 1.</button>
+       </div>
+       <div id="backupWrap" style="display:none;margin-top:14px">
+         <textarea id="backupBox" spellcheck="false" placeholder="Paste a backup code here to load it…" style="width:100%;height:86px;font-family:var(--mono);font-size:11px;background:#fffdf6;border:1px solid var(--line);border-radius:4px;color:#3a3322;padding:8px;resize:vertical"></textarea>
+         <div style="display:flex;gap:8px;margin-top:8px">
+           <button class="btn ghost" id="bCopy" style="flex:1">Copy code</button>
+           <button class="btn ghost" id="bLoad" style="flex:1">Load pasted code</button>
+         </div>
+         <div id="backupMsg" style="font-size:11px;color:var(--mut);margin-top:7px;min-height:14px"></div>
+       </div>
+     </div>
+     <div class="modal-foot"><button class="btn ghost" id="mClose">Close</button></div>
+   </div>`);
+  $("#mClose").onclick=()=> inGame ? closeModal() : titleScreen();
+  if(inGame){
+    $("#mResume").onclick=()=>closeModal();
+    $("#mSaveQuit").onclick=()=>{ saveGame(S._phase||"casework", true); titleScreen(); };
+  }
+  $("#mNew").onclick=()=> modalConfirm("Start a new game? This erases your saved progress.", ()=>{ clearSave(); resetState(); startDay(1); });
+  $("#mBackup").onclick=()=>{
+    const w=$("#backupWrap");
+    w.style.display = (w.style.display==="none") ? "block" : "none";
+    if(w.style.display==="block"){
+      $("#backupBox").value = inGame ? JSON.stringify(snapshot(S._phase||"casework")) : (S._lastSaveData || (readSave()? Store.get() : ""));
+    }
+  };
+  setTimeout(()=>{
+    const cp=$("#bCopy"), ld=$("#bLoad"), box=$("#backupBox"), msg=$("#backupMsg");
+    if(cp) cp.onclick=()=>{ try{ box.select(); document.execCommand("copy"); }catch(e){} if(navigator.clipboard){ navigator.clipboard.writeText(box.value).catch(()=>{}); } if(msg) msg.textContent="Code copied — keep it somewhere safe."; };
+    if(ld) ld.onclick=()=>{
+      try{
+        const o=JSON.parse(box.value.trim());
+        if(!o || !o.day) throw 0;
+        Store.set(JSON.stringify(o));
+        if(msg) msg.textContent="Code loaded — resuming…";
+        setTimeout(()=>resumeFrom(o), 450);
+      }catch(e){ if(msg) msg.textContent="That doesn't look like a valid backup code."; }
+    };
+  },0);
+}
+
+function modalConfirm(text, onYes){
+  modal(`
+   <div class="modal" style="max-width:460px">
+     <div class="modal-top"><div class="k">Confirm</div><h2>Are you sure?</h2></div>
+     <div class="modal-body"><div class="memo-letter" style="font-size:13px">${text}</div></div>
+     <div class="modal-foot">
+       <button class="btn ghost" id="cNo">Cancel</button>
+       <button class="start" id="cYes">Yes</button>
+     </div>
+   </div>`);
+  $("#cNo").onclick=()=>openMenu();
+  $("#cYes").onclick=()=>{ closeModal(); onYes(); };
 }
 
 function renderRules(freshId){
@@ -620,6 +833,12 @@ function modal(html){ modalHost.innerHTML=html; scrim.classList.add("show"); }
 function closeModal(){ scrim.classList.remove("show"); }
 
 function titleScreen(){
+  closeModal();
+  const save = readSave();
+  const startBlock = save
+    ? `<button class="start" id="cont">Continue · Day ${save.day}</button>
+       <button class="btn ghost" id="newg" style="margin-top:12px;width:auto">New game</button>`
+    : `<button class="start" id="go">Begin Shift 1</button>`;
   modal(`
    <div class="modal" style="max-width:660px">
     <div class="modal-body" style="padding:46px 36px">
@@ -629,23 +848,30 @@ function titleScreen(){
        <p class="blurb">An email tries to leave the building. You decide if it lives or dies.<br><br>
        Each shift the Data Privacy Officer hands you another rule. Each shift the people above you have another reason for you to look the other way — a favour, a threat, an envelope of cash.<br><br>
        Keep the bank's secrets in. Keep your job. Keep your conscience. Pick two.</p>
-       <button class="start" id="go">Begin Shift 1</button>
+       ${startBlock}
        <div class="creds">
          <b>HOW TO PLAY</b><br>
          Read the flagged item · ⌕ scan highlights the risk · ▤ check the rulebook<br>
          RELEASE if it's compliant · BLOCK if it breaks any active policy (then cite which one)<br>
-         Mistakes cost money and strikes. <b>5 strikes and you're fired.</b>
+         Mistakes cost money and strikes. <b>5 strikes and you're fired.</b> · ☰ Menu to save
        </div>
      </div>
     </div>
    </div>`);
-  $("#go").onclick=()=>{ closeModal(); startDay(1); };
+  if(save){
+    $("#cont").onclick=()=> resumeFrom(readSave());
+    $("#newg").onclick=()=> modalConfirm("Start a new game? This erases your saved progress.", ()=>{ clearSave(); resetState(); startDay(1); });
+  } else {
+    $("#go").onclick=()=>{ closeModal(); resetState(); startDay(1); };
+  }
 }
 
 function startDay(d){
   S.day=d;
   S.processed=S.breaches=S.falseBlocks=S.procedural=0;
+  S.idx=0;
   updateHUD();
+  saveGame("briefing");
   const br=BRIEF[d]; const nr=ruleById(br.rule);
   modal(`
    <div class="modal">
@@ -691,6 +917,7 @@ function renderCase(){
   const c=S.queue[S.idx];
   if(!c){ endDay(); return; }
   S.citing=false; citePanel.classList.remove("show");
+  saveGame("casework");
   renderQueue();
 
   const dom=domainOf(c.to);
@@ -966,6 +1193,7 @@ function settle(){
 
 /* ===================================================== ENDINGS ========== */
 function ending(kind){
+  clearSave();
   let k="The End", h="", body="";
   if(kind==="fired"){
     h="TERMINATED";
