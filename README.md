@@ -80,4 +80,5 @@ Then add a `signingConfigs` block in `app/build.gradle` referencing that keystor
 - The game uses Google Fonts over the network; with no connection it falls back
   to the device's monospace/serif fonts and remains fully playable.
 - Application id: `com.meridian.clearance`.
+- Length: a full game now runs **22 shifts** with eleven policies introduced over time, hundreds of procedurally generated cases (deterministic per save), an evidence/whistleblower arc, strike-recovery, reward milestones, and branching endings — roughly a 4-hour playthrough.
 - Saving: progress auto-saves after every item and at the start of each shift; use **Continue** on the title screen, or the in-game **☰ Menu** to save, start over, or copy a portable backup code. (Saves live in the app's local storage.)

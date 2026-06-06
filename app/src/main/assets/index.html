@@ -377,285 +377,411 @@
 <div class="scrim" id="scrim"><div id="modalHost"></div></div>
 
 <script>
-/* ========================================================= DATA ========= */
+/* ========================================================= DATA / ENGINE = */
 const INTERNAL = "meridiantrust.com";
-const PERSONAL = ["gmail.com","yahoo.com","outlook.com","hotmail.com","icloud.com","proton.me"];
-const WHITELIST = ["clearwater-audit.com","lexford-legal.com"];
-const PARTNER_NAMES = {"clearwater-audit.com":"Clearwater Audit LLP","lexford-legal.com":"Lexford Legal"};
-const validTicket = t => !!t && /^DLP-\d{5}$/.test(t);
-const domainOf = e => (e.split("@")[1]||"").toLowerCase();
+const PARTNERS = {
+  "clearwater-audit.com":"Clearwater Audit LLP",
+  "lexford-legal.com":"Lexford Legal",
+  "harringford-tax.com":"Harringford Tax Advisory",
+  "delphi-actuarial.com":"Delphi Actuarial"
+};
+const PARTNER_NAMES = PARTNERS;
+const WHITELIST = Object.keys(PARTNERS);
+const PERSONAL = ["gmail.com","yahoo.com","outlook.com","hotmail.com","icloud.com","proton.me","gmx.com"];
+const LOOKALIKE = ["meridiantrust-secure.com","meridian-trust.com","meridiantrust.co","meridiantrustbank.com","secure-meridiantrust.com","meridiantru5t.com"];
+const VENDORS = ["officeplus-supplies.com","brightspark-events.com","metro-couriers.com","nimbus-hosting.com","quill-printers.com","verdant-catering.com"];
+const SANCTIONED = ["RU","KP","IR","BY","SY"];
+const REGIONS_OK = ["EU","UK","US","SG","JP","CA","AU"];
 
-/* The growing rulebook. day = shift it is introduced. */
+const domainOf = e => (e.split("@")[1]||"").toLowerCase();
+function classifyDomain(dom){
+  if(dom===INTERNAL) return "internal";
+  if(PARTNERS[dom]) return "partner";
+  if(PERSONAL.includes(dom)) return "personal";
+  if(LOOKALIKE.includes(dom)) return "lookalike";
+  return "external";
+}
+
+/* When each policy comes into force (shift number). */
+const RULEDAY = {R1:1,R2:2,R3:3,R4:4,R5:5,R6:6,R7:7,R8:9,R9:11,R10:13,R11:15};
+const RESTRICTED_IP = ["trade_algo","source_code","ma_docs"];
+const RESTRICTED_AUTH = ["Legal","Compliance"];
+
+const ticketFormatOK = t => !!t && /^DLP-\d{5}$/.test(t);
+function ticketValid(c, day){
+  if(!ticketFormatOK(c.ticket)) return false;
+  if(day>=RULEDAY.R8 && c.ticketDay!=null && (day - c.ticketDay) > 3) return false; // expired
+  return true;
+}
+
 const RULES = [
-  {id:"R1",day:1,name:"PII Containment",
-   short:"Customer PII must never leave @meridiantrust.com.",
+  {id:"R1",day:RULEDAY.R1,name:"PII Containment",
+   short:"Customer PII must never leave the bank.",
    text:"Customer personal data — full account numbers, national ID numbers, payment-card numbers — may not be sent to any address outside @meridiantrust.com. Block any external message that carries it."},
-  {id:"R2",day:2,name:"No Personal Mailboxes",
-   short:"Confidential / Restricted may not go to personal email providers.",
-   text:"Anything marked CONFIDENTIAL or RESTRICTED may not be sent to a personal email provider (gmail, yahoo, outlook, hotmail, icloud, proton) — even by our own staff using a personal account."},
-  {id:"R3",day:3,name:"Approved Partners",
+  {id:"R2",day:RULEDAY.R2,name:"No Personal Mailboxes",
+   short:"Confidential / Restricted may not go to personal email.",
+   text:"Anything marked CONFIDENTIAL or RESTRICTED may not be sent to a personal email provider (gmail, yahoo, outlook, hotmail, icloud, proton, gmx) — even by our own staff using a personal account."},
+  {id:"R3",day:RULEDAY.R3,name:"Approved Partners",
    short:"Partners may receive sensitive mail only when ENCRYPTED.",
-   text:"Whitelisted partners — Clearwater Audit and Lexford Legal — may receive Confidential data or customer PII, but only when the message is ENCRYPTED. Unencrypted sensitive mail to a partner must be blocked."},
-  {id:"R4",day:4,name:"Bulk Export Tickets",
+   text:"Whitelisted partners (Clearwater Audit, Lexford Legal, Harringford Tax, Delphi Actuarial) may receive Confidential data or customer PII, but only when the message is ENCRYPTED. Unencrypted sensitive mail to a partner must be blocked."},
+  {id:"R4",day:RULEDAY.R4,name:"Bulk Export Tickets",
    short:"Exports over 200 records need a valid approval ticket.",
    text:"Any export of more than 200 customer records to an external recipient requires a valid approval ticket in the form DLP-##### (five digits). Missing, malformed, or absent ticket → block."},
-  {id:"R5",day:5,name:"Protected IP",
+  {id:"R5",day:RULEDAY.R5,name:"Protected IP",
    short:"Trading algorithms, source code & M&A docs may NEVER leave.",
-   text:"Trading algorithms, source code, and M&A deal documents may never leave the organisation. There is NO exception — not encryption, not a whitelisted partner, not an approval ticket. Always block when external."},
-  {id:"R6",day:6,name:"Watchlist Escalation",
-   short:"Block & escalate ALL mail from watchlisted personnel.",
-   text:"Personnel under active investigation are placed on the watchlist. Block and escalate ALL of their outbound mail — internal or external, sensitive or not — and let Compliance review it. Current watchlist: H. Reeve (CFO), M. Vale (Payments)."}
+   text:"Trading algorithms, source code, and M&A deal documents may never leave the organisation. No exception — not encryption, not a partner, not a ticket. Always block when external."},
+  {id:"R6",day:RULEDAY.R6,name:"Watchlist Escalation",
+   short:"Block & escalate ANY message flagged WATCHLIST.",
+   text:"Senders flagged by Compliance as under investigation are marked WATCHLIST on the alert banner. Block and escalate ALL of their outbound mail — internal or external, sensitive or not — no matter their title."},
+  {id:"R7",day:RULEDAY.R7,name:"Look-alike Domains",
+   short:"Domains imitating the bank are hostile — always block.",
+   text:"Addresses on domains that imitate ours (e.g. meridiantrust-secure.com, meridian-trust.com, meridiantru5t.com) are NOT internal — they are spoofed exfiltration targets. Block every message to a look-alike domain, whatever it contains."},
+  {id:"R8",day:RULEDAY.R8,name:"Ticket Freshness",
+   short:"Approval tickets expire after 3 shifts.",
+   text:"An approval ticket is only valid if it was issued within the last 3 shifts. The alert shows the issue shift; if it is more than 3 shifts old the ticket is EXPIRED and the bulk export must be blocked."},
+  {id:"R9",day:RULEDAY.R9,name:"Need-to-Know",
+   short:"Only Legal/Compliance may send RESTRICTED externally.",
+   text:"Restricted material (non-IP — e.g. legal, HR, board files) may only leave the building if the sender's department is Legal or Compliance. Anyone else sending Restricted outside, even encrypted to a partner, must be blocked."},
+  {id:"R10",day:RULEDAY.R10,name:"Sanctioned Regions",
+   short:"No outbound mail to sanctioned regions.",
+   text:"Recipients in sanctioned regions (RU, KP, IR, BY, SY) are off-limits. The alert shows the recipient region; block any outbound message to a sanctioned region regardless of content."},
+  {id:"R11",day:RULEDAY.R11,name:"Redaction on Bulk PII",
+   short:"Bulk PII to partners must be REDACTED.",
+   text:"A bulk export (over 200 records) of customer PII to a partner must be marked REDACTED, even when encrypted and ticketed. If redaction is not applied, block it."}
 ];
 const ruleById = id => RULES.find(r=>r.id===id);
 
-/* Compute which active rules a case violates. */
+/* ---- The verdict engine: which active policies a message violates. ---- */
 function violations(c, day){
   const dom = domainOf(c.to);
-  const internal = dom===INTERNAL, external=!internal;
-  const personal = PERSONAL.includes(dom);
-  const whitel = WHITELIST.includes(dom);
+  const cat = classifyDomain(dom);
+  const internal = cat==="internal", partner=cat==="partner",
+        personal = cat==="personal", lookalike=cat==="lookalike";
+  const external = !internal;
   const hasPII = (c.pii||[]).length>0;
   const conf = c.cls==="Confidential"||c.cls==="Restricted";
+  const restricted = c.cls==="Restricted";
+  const isIP = RESTRICTED_IP.includes(c.ip);
   const v=[];
-  if(day>=1 && hasPII && external){
-    const partnerOK = day>=3 && whitel && c.enc;       // R3 exception
+
+  if(day>=RULEDAY.R1 && hasPII && external){
+    const partnerOK = day>=RULEDAY.R3 && partner && c.enc;
     if(!partnerOK) v.push("R1");
   }
-  if(day>=2 && conf && personal) v.push("R2");
-  if(day>=3 && whitel && (conf||hasPII) && !c.enc) v.push("R3");
-  if(day>=4 && external && c.records>200 && !validTicket(c.ticket)) v.push("R4");
-  if(day>=5 && external && ["trade_algo","source_code","ma_docs"].includes(c.ip)) v.push("R5");
-  if(day>=6 && c.watch) v.push("R6");
+  if(day>=RULEDAY.R2 && conf && personal) v.push("R2");
+  if(day>=RULEDAY.R3 && partner && (conf||hasPII) && !c.enc) v.push("R3");
+  if(day>=RULEDAY.R4 && external && (c.records||0)>200 && !ticketValid(c,day)) v.push("R4");
+  if(day>=RULEDAY.R5 && external && isIP) v.push("R5");
+  if(day>=RULEDAY.R6 && c.watch) v.push("R6");
+  if(day>=RULEDAY.R7 && lookalike) v.push("R7");
+  if(day>=RULEDAY.R8 && external && (c.records||0)>200 && ticketFormatOK(c.ticket) &&
+     c.ticketDay!=null && (day-c.ticketDay)>3){
+    if(!v.includes("R4")) v.push("R4");
+    v.push("R8");
+  }
+  if(day>=RULEDAY.R9 && external && restricted && !isIP && !RESTRICTED_AUTH.includes(c.dept)) v.push("R9");
+  if(day>=RULEDAY.R10 && external && SANCTIONED.includes(c.region)) v.push("R10");
+  if(day>=RULEDAY.R11 && partner && hasPII && (c.records||0)>200 && !c.redacted) v.push("R11");
+
   return [...new Set(v)];
 }
 
-/* ---- The casework. Each item is a flagged outbound message. ---- */
-const CASES = [
-/* ===== SHIFT 1 — learning R1 ===== */
-{day:1,from:"Priya Anand · Retail Ops",to:"priya.anand@meridiantrust.com",
-  cls:"Internal",alert:"Recipient resembles internal address",
-  body:"Re-sending the branch rota to myself so I can print it at the front desk.",
-  attach:"branch_rota.pdf",pii:[],enc:false},
-{day:1,from:"Tom Becker · Collections",to:"t.becker.debt@gmail.com",
-  cls:"Confidential",alert:"Account numbers detected · external recipient",
-  body:"Forwarding the overdue list to my home address so I can chase them tonight.\nAcct 4471-009823, 4471-118840, 4471-330021…",
-  attach:"overdue_accounts.xlsx",pii:["account_number"],enc:false},
-{day:1,from:"Help Desk Auto",to:"updates@meridiantrust.com",
-  cls:"Public",alert:"Bulk recipient",
-  body:"Scheduled maintenance window this Sunday 02:00–04:00. No action required.",
-  attach:"",pii:[],enc:false},
-{day:1,from:"Sandra Pyle · Mortgages",to:"sandra_pyle@yahoo.com",
-  cls:"Internal",alert:"PII detected · external recipient",
-  body:"Client national ID for the Whitmore file so I can finish the application at home.\nID: 88-204-9931",
-  attach:"",pii:["national_id"],enc:false},
-{day:1,from:"Marketing",to:"newsletter@meridiantrust.com",
-  cls:"Public",alert:"Large attachment",
-  body:"Q2 customer newsletter draft for internal review. Nothing sensitive — please proof.",
-  attach:"newsletter_Q2.pdf",pii:[],enc:false},
-{day:1,from:"Dev Okoro · Cards",to:"dev.okoro@meridiantrust.com",
-  cls:"Confidential",alert:"Card numbers detected",
-  body:"Internal reconciliation file. Card data stays in-house.",
-  attach:"recon_cards.csv",pii:["card_number"],enc:false},
+/* ===================================================== GENERATOR ========= */
+function mulberry32(a){ return function(){ a|=0; a=a+0x6D2B79F5|0; let t=Math.imul(a^a>>>15,1|a); t=t+Math.imul(t^t>>>7,61|t)^t; return ((t^t>>>14)>>>0)/4294967296; }; }
+const pick = (rng,a)=>a[Math.floor(rng()*a.length)];
+const chance = (rng,p)=>rng()<p;
+const rint = (rng,lo,hi)=>lo+Math.floor(rng()*(hi-lo+1));
 
-/* ===== SHIFT 2 — R2 + first bribe ===== */
-{day:2,from:"Marcus Vale · Payments",to:"marcus.vale.private@gmail.com",
-  cls:"Confidential",alert:"Confidential payroll → personal mailbox",
-  body:"Pulling the executive comp sheet to review over the weekend.",
-  attach:"exec_compensation.xlsx",pii:[],enc:false,
-  special:"bribe",
-  sticky:{t:"PRIVATE — not for the file",b:"Hey — that's just me checking my own bonus, nothing dodgy. Let this one through and there's €500 in it for you, cash. We both know nobody reads these. — M.V."}},
-{day:2,from:"Legal Intake",to:"intake@lexford-legal.com",
-  cls:"Confidential",alert:"Confidential → external law firm",
-  body:"Litigation hold memo for the Castellan matter. Counsel is expecting this.",
-  attach:"litigation_hold.docx",pii:[],enc:true},
-{day:2,from:"Rosa Méndez · HR",to:"rosa.mendez@meridiantrust.com",
-  cls:"Restricted",alert:"Restricted grievance file",
-  body:"Internal grievance notes for the panel. Stays internal.",
-  attach:"grievance_panel.pdf",pii:[],enc:false},
-{day:2,from:"Karl Vogt · Trading",to:"karl.vogt@outlook.com",
-  cls:"Confidential",alert:"Confidential desk notes → personal mailbox",
-  body:"Sending the desk strategy notes to my personal so I can read on the train.",
-  attach:"desk_notes.pdf",pii:[],enc:false},
-{day:2,from:"Branch 14",to:"facilities@meridiantrust.com",
-  cls:"Public",alert:"Routine",
-  body:"AC is broken on the second floor again. Please send someone.",
-  attach:"",pii:[],enc:false},
-{day:2,from:"Aileen Brooks · Wealth",to:"client.copy@gmail.com",
-  cls:"Internal",alert:"Investment summary → personal mailbox",
-  body:"Generic market outlook PDF for a prospect. No client data, just our public outlook deck.",
-  attach:"market_outlook_public.pdf",pii:[],enc:false},
+const FIRST=["Priya","Tom","Sandra","Dev","Karl","Rosa","Aileen","Greg","Nina","Felix","Maya","Diane","Harlan","Marcus","Owen","Lena","Sofia","Raj","Mara","Idris","Clara","Btáar","Yusuf","Hana","Bruno","Elsa","Noah","Vera","Sam","Ines","Theo","Dana","Omar","Liv","Karim","Joan","Ava","Niko","Ruth","Pavel"];
+const LAST=["Anand","Becker","Pyle","Okoro","Vogt","Méndez","Brooks","Salt","Falk","Crane","Lund","Ostrow","Reeve","Vale","Hart","Cole","Reyes","Pat el","Ito","Khan","Voss","Frost","Mara","Diaz","Lim","Nash","Bauer","Roy","Quinn","Sato","Marsh","Ek","Ali","Berg","Rao","Webb","Dunn","Fox","Stein","Cruz"];
+const DEPTS=["Retail Ops","Collections","Mortgages","Cards","Payments","Wealth","Trading","HR","IT","Marketing","Treasury","Onboarding","Analytics","Procurement","Comms","Facilities","Quant Desk","Platform Eng","Risk"];
+function personName(rng){ return pick(rng,FIRST).replace(" ","")+" "+pick(rng,LAST).replace(" ",""); }
 
-/* ===== SHIFT 3 — R3 partner/encryption ===== */
-{day:3,from:"Audit Liaison",to:"reports@clearwater-audit.com",
-  cls:"Confidential",alert:"Confidential → partner · NOT encrypted",
-  body:"Quarter-end ledger extract for the auditors. (Encryption toggle was off.)",
-  attach:"ledger_extract.xlsx",pii:[],enc:false},
-{day:3,from:"Audit Liaison",to:"reports@clearwater-audit.com",
-  cls:"Confidential",alert:"Confidential → partner",
-  body:"Same ledger extract, re-sent with encryption enabled per policy.",
-  attach:"ledger_extract.xlsx",pii:[],enc:true},
-{day:3,from:"Nina Falk · Onboarding",to:"records@lexford-legal.com",
-  cls:"Confidential",alert:"Customer PII → partner · NOT encrypted",
-  body:"KYC pack for the new corporate client. National IDs and account numbers attached.",
-  attach:"kyc_pack.zip",pii:["national_id","account_number"],enc:false},
-{day:3,from:"Nina Falk · Onboarding",to:"records@lexford-legal.com",
-  cls:"Confidential",alert:"Customer PII → partner",
-  body:"KYC pack re-sent over the encrypted channel as required.",
-  attach:"kyc_pack.zip",pii:["national_id","account_number"],enc:true},
-{day:3,from:"Greg Salt · IT",to:"greg.salt@proton.me",
-  cls:"Confidential",alert:"Confidential → personal mailbox",
-  body:"Network diagram so I can work on it from home tonight.",
-  attach:"network_map.pdf",pii:[],enc:true},
-{day:3,from:"Reception",to:"all-staff@meridiantrust.com",
-  cls:"Public",alert:"Bulk recipient",
-  body:"Reminder: badge photos for the new directory are this Thursday.",
-  attach:"",pii:[],enc:false},
+const CONTENT = {
+  pii_accounts:{cls:"Confidential",pii:["account_number"],attach:"account_list.xlsx",blurb:"customer account list"},
+  pii_kyc:{cls:"Confidential",pii:["national_id","account_number"],attach:"kyc_pack.zip",blurb:"KYC onboarding pack"},
+  pii_cards:{cls:"Confidential",pii:["card_number"],attach:"card_recon.csv",blurb:"card reconciliation file"},
+  financials:{cls:"Confidential",attach:"ledger_extract.xlsx",blurb:"quarter-end ledger extract"},
+  legal:{cls:"Restricted",attach:"board_minutes.pdf",blurb:"board minutes"},
+  hr:{cls:"Restricted",attach:"grievance_file.pdf",blurb:"HR grievance notes"},
+  algo:{cls:"Restricted",ip:"trade_algo",attach:"alpha_model.py",blurb:"trading model"},
+  src:{cls:"Restricted",ip:"source_code",attach:"ledger_core_src.zip",blurb:"core source bundle"},
+  ma:{cls:"Restricted",ip:"ma_docs",attach:"deal_models.xlsx",blurb:"deal valuation models"},
+  publicnews:{cls:"Public",attach:"newsletter.pdf",blurb:"customer newsletter draft"},
+  internal_note:{cls:"Internal",attach:"handover.md",blurb:"internal handover notes"},
+  invoice:{cls:"Public",attach:"purchase_order.pdf",blurb:"purchase order"}
+};
 
-/* ===== SHIFT 4 — R4 bulk tickets + the pressure case ===== */
-{day:4,from:"Data Team",to:"reports@clearwater-audit.com",
-  cls:"Confidential",alert:"Bulk export 14,200 records · partner · encrypted",
-  body:"Full year transaction sample for the audit. Encrypted. No ticket attached — they need it today.",
-  attach:"txn_sample_2025.csv",pii:[],enc:true,records:14200,ticket:null},
-{day:4,from:"Data Team",to:"reports@clearwater-audit.com",
-  cls:"Confidential",alert:"Bulk export 14,200 records · partner · encrypted",
-  body:"Re-submitted with approval ticket DLP-40912 from the audit liaison.",
-  attach:"txn_sample_2025.csv",pii:[],enc:true,records:14200,ticket:"DLP-40912"},
-{day:4,from:"Felix Crane · Sr. Manager",to:"f.crane.work@gmail.com",
-  cls:"Confidential",alert:"Bulk export 3,400 records → personal mailbox",
-  body:"VP approved this — sending the customer book to my personal so I can work the weekend. Ticket 'pending'.",
-  attach:"customer_book.csv",pii:["account_number"],enc:false,records:3400,ticket:null,
-  special:"pressure"},
-{day:4,from:"Maya Lund · Support",to:"maya.lund@meridiantrust.com",
-  cls:"Internal",alert:"Recipient resembles internal address",
-  body:"Sending myself the ticket backlog to triage in the morning. Internal only.",
-  attach:"backlog.csv",pii:[],enc:false,records:60,ticket:null},
-{day:4,from:"Procurement",to:"sales@officeplus-supplies.com",
-  cls:"Public",alert:"External vendor",
-  body:"Purchase order for 30 office chairs. No customer data.",
-  attach:"PO_chairs.pdf",pii:[],enc:false,records:0,ticket:null},
-{day:4,from:"Analytics",to:"reports@clearwater-audit.com",
-  cls:"Confidential",alert:"Bulk export 980 records · malformed ticket",
-  body:"Risk model dataset for the auditors. Ticket: DLP-77 (that's the one they gave me).",
-  attach:"risk_dataset.csv",pii:[],enc:true,records:980,ticket:"DLP-77"},
+function freshTicket(day,rng){ return {ticket:"DLP-"+rint(rng,10000,99999), ticketDay: Math.max(1, day-rint(rng,0,2))}; }
+function oldTicket(day,rng){ return {ticket:"DLP-"+rint(rng,10000,99999), ticketDay: Math.max(1, day-rint(rng,4,7))}; }
 
-/* ===== SHIFT 5 — R5 protected IP + the discovery ===== */
-{day:5,from:"Quant Desk",to:"backup@proton.me",
-  cls:"Restricted",alert:"Trading algorithm → personal mailbox",
-  body:"Backing up the alpha model 'NIGHTJAR' to my personal cloud. It's encrypted, should be fine?",
-  attach:"nightjar_alpha.py",pii:[],enc:true,ip:"trade_algo"},
-{day:5,from:"Platform Eng",to:"dev@lexford-legal.com",
-  cls:"Restricted",alert:"Source code → partner",
-  body:"Sharing the core ledger source with outside counsel for the patent filing. Encrypted, whitelisted partner.",
-  attach:"ledger_core_src.zip",pii:[],enc:true,ip:"source_code"},
-{day:5,from:"Internal Wiki",to:"docs@meridiantrust.com",
-  cls:"Internal",alert:"Code snippet detected",
-  body:"Pushing the onboarding code samples to the internal wiki. Stays in-house.",
-  attach:"samples.zip",pii:[],enc:false,ip:"source_code"},
-{day:5,from:"Harlan Reeve · CFO",to:"hr.reeve.holdings@proton.me",
-  cls:"Restricted",alert:"M&A deal documents → personal mailbox",
-  body:"Project Halcyon valuation models and the target shortlist. Moving these to my private account before the board meeting.",
-  attach:"halcyon_MA_models.xlsx",pii:[],enc:true,ip:"ma_docs",
-  special:"discovery",
-  sticky:{t:"Recovered draft in thread",b:"…once Halcyon closes, route the advisory fee through Vale's account and we settle up offshore. Delete this chain."}},
-{day:5,from:"Comms",to:"press@meridiantrust.com",
-  cls:"Public",alert:"Routine",
-  body:"Draft press release for the new savings product. For internal sign-off.",
-  attach:"press_savings.docx",pii:[],enc:false,ip:null},
-{day:5,from:"Audit Liaison",to:"reports@clearwater-audit.com",
-  cls:"Confidential",alert:"Bulk export 5,100 records · encrypted",
-  body:"Final audit sample. Ticket DLP-41550 attached, encrypted.",
-  attach:"final_sample.csv",pii:[],enc:true,records:5100,ticket:"DLP-41550",ip:null},
+/* Each scenario builds a case with a known outcome. release=true → compliant. */
+const SCENARIOS = [
+  // ---- compliant (RELEASE) ----
+  {key:"clean_internal", release:true, build:(d,r)=>({target:"internal", content:pick(r,["pii_accounts","financials","internal_note","pii_cards","src"]), enc:chance(r,.4)})},
+  {key:"clean_vendor_public", release:true, build:(d,r)=>({target:"vendor", content:pick(r,["publicnews","invoice","internal_note"]), region:pick(r,REGIONS_OK)})},
+  {key:"clean_partner_enc", release:true, rule:"R3", build:(d,r)=>({target:"partner", content:pick(r,["financials","pii_kyc","pii_accounts"]), enc:true, region:pick(r,REGIONS_OK)})},
+  {key:"clean_partner_bulk_ok", release:true, rule:"R4", build:(d,r)=>Object.assign({target:"partner", content:"financials", enc:true, records:rint(r,300,9000), region:pick(r,REGIONS_OK)}, freshTicket(d,r))},
+  {key:"clean_restricted_auth", release:true, rule:"R9", build:(d,r)=>({target:"partner", content:pick(r,["legal","hr"]), enc:true, dept:pick(r,RESTRICTED_AUTH), region:pick(r,REGIONS_OK)})},
+  {key:"clean_bulkpii_redacted", release:true, rule:"R11", build:(d,r)=>Object.assign({target:"partner", content:"pii_accounts", enc:true, records:rint(r,300,9000), redacted:true, region:pick(r,REGIONS_OK)}, freshTicket(d,r))},
 
-/* ===== SHIFT 6 — R6 watchlist payoff ===== */
-{day:6,from:"Harlan Reeve · CFO",to:"harlan.reeve@meridiantrust.com",
-  cls:"Internal",alert:"WATCHLIST: sender under investigation",
-  body:"Just forwarding the board agenda to myself. Completely routine — surely you don't need to hold this?",
-  attach:"board_agenda.pdf",pii:[],enc:false,watch:true,ip:null},
-{day:6,from:"Marcus Vale · Payments",to:"settlements@clearwater-audit.com",
-  cls:"Confidential",alert:"WATCHLIST: sender under investigation",
-  body:"Advisory fee settlement instructions. Encrypted, going to our approved partner — perfectly clean.",
-  attach:"settlement_instr.pdf",pii:[],enc:true,watch:true,ip:null},
-{day:6,from:"Diane Ostrow · VP Ops",to:"d.ostrow@meridiantrust.com",
-  cls:"Internal",alert:"Recipient resembles internal address",
-  body:"Forwarding the DLP audit findings to myself. Internal.",
-  attach:"dlp_findings.pdf",pii:[],enc:false,watch:false,ip:null},
-{day:6,from:"New Analyst · DLP",to:"team@meridiantrust.com",
-  cls:"Internal",alert:"Routine",
-  body:"Handover notes for the next shift. Nothing sensitive.",
-  attach:"handover.md",pii:[],enc:false,watch:false,ip:null},
-{day:6,from:"Treasury",to:"ops@clearwater-audit.com",
-  cls:"Confidential",alert:"Customer PII → partner · NOT encrypted",
-  body:"Reconciliation file for the auditors. Forgot to flip encryption on, sorry.",
-  attach:"recon.xlsx",pii:["account_number"],enc:false,watch:false,ip:null},
-{day:6,from:"Harlan Reeve · CFO",to:"hr.reeve.holdings@proton.me",
-  cls:"Restricted",alert:"WATCHLIST + M&A docs → personal mailbox",
-  body:"Last copy of the Halcyon files before the trail goes cold. You really going to stop me, after everything?",
-  attach:"halcyon_final.zip",pii:[],enc:true,watch:true,ip:"ma_docs"}
+  // ---- violations (BLOCK) ----
+  {key:"pii_external", release:false, rule:"R1", build:(d,r)=>({target:pick(r,["vendor","personal"]), content:pick(r,["pii_accounts","pii_kyc","pii_cards"]), region:pick(r,REGIONS_OK)})},
+  {key:"conf_personal", release:false, rule:"R2", build:(d,r)=>({target:"personal", content:"financials"})},
+  {key:"partner_unenc", release:false, rule:"R3", build:(d,r)=>({target:"partner", content:pick(r,["financials","pii_kyc"]), enc:false, region:pick(r,REGIONS_OK)})},
+  {key:"bulk_no_ticket", release:false, rule:"R4", build:(d,r)=>({target:"partner", content:"financials", enc:true, records:rint(r,300,12000), ticket:null, region:pick(r,REGIONS_OK)})},
+  {key:"protected_ip", release:false, rule:"R5", build:(d,r)=>({target:pick(r,["personal","partner","vendor"]), content:pick(r,["algo","src","ma"]), enc:chance(r,.6), region:pick(r,REGIONS_OK)})},
+  {key:"watchlisted", release:false, rule:"R6", build:(d,r)=>({target:pick(r,["internal","vendor","partner"]), content:pick(r,["internal_note","financials","publicnews"]), enc:chance(r,.5), watch:true, region:pick(r,REGIONS_OK)})},
+  {key:"lookalike", release:false, rule:"R7", build:(d,r)=>({target:"lookalike", content:pick(r,["financials","pii_accounts","internal_note"]), enc:chance(r,.5)})},
+  {key:"expired_ticket", release:false, rule:"R8", build:(d,r)=>Object.assign({target:"partner", content:"financials", enc:true, records:rint(r,300,9000), region:pick(r,REGIONS_OK)}, oldTicket(d,r))},
+  {key:"restricted_unauth", release:false, rule:"R9", build:(d,r)=>({target:"partner", content:pick(r,["legal","hr"]), enc:true, dept:pick(r,["Marketing","Trading","Retail Ops","Payments","Wealth","Treasury"]), region:pick(r,REGIONS_OK)})},
+  {key:"sanctioned", release:false, rule:"R10", build:(d,r)=>({target:"sanctioned", content:pick(r,["publicnews","financials","invoice"]), enc:chance(r,.5), region:pick(r,SANCTIONED)})},
+  {key:"bulkpii_unredacted", release:false, rule:"R11", build:(d,r)=>Object.assign({target:"partner", content:"pii_accounts", enc:true, records:rint(r,300,9000), redacted:false, region:pick(r,REGIONS_OK)}, freshTicket(d,r))}
 ];
 
-/* Briefings shown before each shift (from the Data Privacy Officer) */
-const BRIEF = {
-1:{k:"Onboarding Memo · Day 1",h:"Welcome to the Console",
- letter:`Analyst,
+function newestRule(day){ let best=null,bd=-1; for(const k in RULEDAY){ if(RULEDAY[k]<=day && RULEDAY[k]>bd){bd=RULEDAY[k];best=k;} } return best; }
 
-You are now monitoring outbound mail for Meridian Trust. The system flags anything that looks like a leak; your job is to decide RELEASE or BLOCK.
+function addressFor(target,rng){
+  const slug = s => s.toLowerCase().replace(/[^a-z]+/g,".").replace(/^\.|\.$/g,"");
+  switch(target){
+    case "internal":  return slug(personName(rng))+"@"+INTERNAL;
+    case "partner":   return pick(rng,["reports","intake","records","settlements","ops","filings"])+"@"+pick(rng,Object.keys(PARTNERS));
+    case "personal":  return slug(personName(rng))+"@"+pick(rng,PERSONAL);
+    case "vendor":    return pick(rng,["sales","accounts","ops","support","billing"])+"@"+pick(rng,VENDORS);
+    case "lookalike": return slug(personName(rng))+"@"+pick(rng,LOOKALIKE);
+    case "sanctioned":return pick(rng,["trade","exchange","desk","settle"])+"@"+pick(rng,["global-exchange.example","intl-settle.example","offshore-holdings.example","east-bridge.example"]);
+    default:          return slug(personName(rng))+"@"+pick(rng,VENDORS);
+  }
+}
+function bodyFor(target,content,rng){
+  const b=content.blurb;
+  const t = {
+    internal:[`Internal copy of the ${b}. Stays in-house.`,`Sending the ${b} to a colleague for review.`],
+    partner:[`The ${b} for our partner, as requested.`,`Forwarding the ${b} to the external firm.`],
+    personal:[`Sending the ${b} to my personal so I can finish at home.`,`Pulling the ${b} to work on this weekend.`],
+    vendor:[`The ${b} for the supplier.`,`Routine ${b} to the vendor.`],
+    lookalike:[`Re: the ${b} — replying to the address in the thread.`,`Sending the ${b} as asked (reply-to looked like ours).`],
+    sanctioned:[`The ${b} for the overseas desk.`,`Forwarding the ${b} to the regional office.`]
+  };
+  return pick(rng, t[target]||t.vendor);
+}
+function primaryAlert(c, day){
+  const cat=classifyDomain(domainOf(c.to)), ext=cat!=="internal";
+  if(c.watch) return "WATCHLIST: sender under investigation";
+  if(cat==="lookalike") return "Recipient domain resembles the bank's";
+  if(day>=RULEDAY.R10 && SANCTIONED.includes(c.region) && ext) return "Recipient in sanctioned region ("+c.region+")";
+  if(RESTRICTED_IP.includes(c.ip) && ext) return "Protected-IP signature ("+c.ip.replace("_"," ")+")";
+  if((c.pii||[]).length && ext) return "Customer identifiers · external recipient";
+  if((c.records||0)>200 && ext) return "Bulk export · "+c.records.toLocaleString()+" records";
+  if((c.cls==="Confidential"||c.cls==="Restricted") && cat==="personal") return c.cls+" → personal mailbox";
+  if((c.cls==="Confidential"||c.cls==="Restricted") && cat==="partner" && !c.enc) return c.cls+" → partner · not encrypted";
+  if(cat==="partner") return c.cls+" → external partner";
+  if(cat==="internal" && /@meridiantrust\.com$/.test(c.to)) return "Recipient resembles internal address";
+  return "Outbound message flagged for review";
+}
 
-We start simple. One policy today. Open the Rulebook (▤) any time — I will add to it as you earn my trust.
+function generateCase(day, rng){
+  const avail = SCENARIOS.filter(s=> !s.rule || RULEDAY[s.rule]<=day);
+  const newest = newestRule(day);
+  const entries = avail.map(s=>{
+    let w = s.release ? 2.3 : 1.5;
+    if(s.rule===newest) w = 4;
+    else if(s.rule && (day-RULEDAY[s.rule])<=2) w += 1.3;
+    return {w, v:s};
+  });
+  let tot=entries.reduce((a,e)=>a+e.w,0), x=rng()*tot, sc=entries[entries.length-1].v;
+  for(const e of entries){ if((x-=e.w)<0){ sc=e.v; break; } }
+  const f = sc.build(day,rng);
+  const content = CONTENT[f.content];
+  const dept = f.dept || pick(rng,DEPTS);
+  const c = {
+    scripted:false,
+    from: personName(rng)+" · "+dept,
+    dept,
+    to: addressFor(f.target,rng),
+    cls: f.cls || content.cls,
+    enc: !!f.enc,
+    pii: (content.pii||[]).slice(),
+    ip: content.ip||null,
+    records: f.records||0,
+    ticket: f.ticket||null,
+    ticketDay: (f.ticketDay==null?null:f.ticketDay),
+    watch: !!f.watch,
+    redacted: !!f.redacted,
+    region: f.region||"EU",
+    attach: content.attach
+  };
+  c.body = bodyFor(f.target, content, rng);
+  c.alert = primaryAlert(c, day);
+  return c;
+}
 
-Don't release what you can't defend. The regulator is not forgiving, and neither am I.
+/* ===================================================== SCRIPTED BEATS ==== */
+const WHISTLE_DAY = 20;
+const SCRIPTED = {
+  2:[{at:2, c:{special:"bribe", bribe:500, from:"Marcus Vale · Payments", to:"marcus.vale.private@gmail.com",
+      cls:"Confidential", pii:[], enc:false, attach:"exec_compensation.xlsx", dept:"Payments",
+      alert:"Confidential payroll → personal mailbox",
+      body:"Pulling the exec comp sheet to review over the weekend.",
+      sticky:{t:"PRIVATE — not for the file", b:"Let this one through and there's €500 in it for you, cash. Nobody reads these. — M.V."}}}],
+  4:[{at:3, c:{special:"pressure", vp:"Diane Ostrow", from:"Felix Crane · Sr. Manager", to:"f.crane.work@gmail.com",
+      cls:"Confidential", pii:["account_number"], enc:false, records:3400, ticket:null, dept:"Retail Ops",
+      attach:"customer_book.csv", alert:"Bulk export 3,400 → personal mailbox",
+      body:"VP approved this — sending the customer book to my personal to work the weekend."}}],
+  7:[{at:4, c:{special:"discovery", evidence:1, from:"Marcus Vale · Payments", to:"settlements@harringford-tax.com",
+      cls:"Confidential", enc:false, attach:"advisory_settlement.pdf", dept:"Payments",
+      alert:"Confidential → partner · not encrypted",
+      body:"Advisory-fee settlement instructions. (Encryption was off.)",
+      sticky:{t:"Recovered fragment", b:"…route the Halcyon advisory fee through the tax vehicle, settle offshore once it clears."}}}],
+  9:[{at:5, c:{special:"bribe", bribe:2000, threat:true, evidence:1, from:"Marcus Vale · Payments", to:"m.vale.holdings@proton.me",
+      cls:"Restricted", enc:true, ip:"ma_docs", attach:"halcyon_targets.xlsx", dept:"Payments",
+      alert:"M&A documents → personal mailbox",
+      body:"Just backing things up. You and I both want this to go smoothly.",
+      sticky:{t:"Clipped to the message", b:"€2,000 this time. Block it and people start asking why you're so thorough. Be smart. — M.V."}}}],
+  11:[{at:4, c:{special:"pressure", vp:"Diane Ostrow", evidence:1, from:"Diane Ostrow · VP Ops", to:"d.ostrow.personal@outlook.com",
+      cls:"Confidential", pii:["account_number"], enc:false, records:900, ticket:null, dept:"Risk",
+      attach:"risk_register.xlsx", alert:"Bulk PII → VP personal mailbox",
+      body:"I need this at home tonight for the board. Clear it. We've discussed this."}}],
+  13:[{at:6, c:{special:"discovery", evidence:2, from:"Harlan Reeve · CFO", to:"hr.reeve.holdings@proton.me",
+      cls:"Restricted", enc:true, ip:"ma_docs", attach:"halcyon_MA_models.xlsx", dept:"Finance",
+      alert:"M&A documents → personal mailbox",
+      body:"Moving the Halcyon valuation set to my private account before the board meeting.",
+      sticky:{t:"Thread fragment recovered", b:"…once Halcyon closes, the fee routes through Vale. Delete this chain."}}}],
+  16:[{at:5, c:{special:"discovery", evidence:1, from:"Harlan Reeve · CFO", to:"settlements@harringford-tax.com",
+      cls:"Confidential", enc:false, attach:"fee_instructions.pdf", dept:"Finance",
+      alert:"Confidential → partner · not encrypted",
+      body:"Final fee instructions. Encryption off — just push it."}}],
+  18:[{at:7, c:{special:"discovery", evidence:1, watch:true, from:"Marcus Vale · Payments", to:"settlements@harringford-tax.com",
+      cls:"Confidential", enc:true, attach:"settlement_final.pdf", dept:"Payments",
+      alert:"WATCHLIST: sender under investigation",
+      body:"Clean and encrypted, to our approved tax partner. Nothing to see here."}}],
+  20:[{at:8, c:{special:"discovery", evidence:2, watch:true, from:"Harlan Reeve · CFO", to:"hr.reeve.holdings@proton.me",
+      cls:"Restricted", enc:true, ip:"ma_docs", attach:"halcyon_final.zip", dept:"Finance",
+      alert:"WATCHLIST + M&A documents → personal mailbox",
+      body:"Last copy before the trail goes cold. You really going to stop me, after everything?"}}]
+};
+
+/* ===================================================== SHIFT CONFIG ====== */
+const TOTAL_SHIFTS = 22;
+function caseCount(day){ return Math.min(20, 5 + Math.ceil(day*0.7)); }
+function expensesFor(day){
+  const rent = 25 + Math.floor(day/3)*4;
+  const food = 8;
+  return {rent, food};
+}
+const BILLS = {4:["Heating bill",20], 6:["Sibling's medical bill",40], 9:["Overdue medical balance",35],
+  12:["Rent deposit top-up",55], 15:["Family support",45], 18:["Legal consultation",60], 21:["Final medical instalment",70]};
+
+/* ===================================================== BRIEFINGS ========= */
+const RULE_INTRO = {1:"R1",2:"R2",3:"R3",4:"R4",5:"R5",6:"R6",7:"R7",9:"R8",11:"R9",13:"R10",15:"R11"};
+const INTRO_LETTER = {
+  R1:`Analyst,
+
+You monitor outbound mail for Meridian Trust. The system flags anything that looks like a leak; you decide RELEASE or BLOCK.
+
+One policy today. Open the Rulebook (▤) any time — I add to it as you earn my trust.
+
+Don't release what you can't defend.
 
 — E. Mara, Data Privacy Officer`,
- rule:"R1"},
-2:{k:"Policy Update · Day 2",h:"Personal Mailboxes",
- letter:`Good first shift. Now the harder truth: most leaks aren't hackers — they're our own staff emailing work to themselves "to be productive."
+  R2:`Most leaks aren't hackers — they're our own staff mailing work to themselves "to be productive."
 
-New policy attached. Watch for sensitive material heading to gmail, yahoo, proton and the like.
-
-Some of them will be charming about it. Stay boring.
+New policy attached. Watch for sensitive material heading to gmail, proton and the like. Some of them will be charming about it. Stay boring.
 
 — E. Mara, DPO`,
- rule:"R2"},
-3:{k:"Policy Update · Day 3",h:"The Partner Exception",
- letter:`We work with two outside firms — Clearwater Audit and Lexford Legal. They are allowed sensitive data, but ONLY encrypted.
-
-This is where it gets fiddly: same recipient, same file, different verdict depending on one little toggle. Read carefully.
+  R3:`We work with outside firms — they're allowed sensitive data, but ONLY encrypted. Same recipient, same file, different verdict depending on one toggle. Read carefully.
 
 — E. Mara, DPO`,
- rule:"R3"},
-4:{k:"Policy Update · Day 4",h:"Bulk Exports",
- letter:`Compliance wants paper trails on big exports. Over 200 customer records leaving the building? There must be a ticket: DLP and five digits. No ticket, no exit.
-
-One more thing — you may get… requests… to wave things through. Requests are not tickets.
+  R4:`Compliance wants paper trails on big exports. Over 200 records leaving? There must be a ticket: DLP and five digits. No ticket, no exit. And note — requests to "wave it through" are not tickets.
 
 — E. Mara, DPO`,
- rule:"R4"},
-5:{k:"Policy Update · Day 5",h:"What Never Leaves",
- letter:`Some things have no legitimate reason to ever leave us: our trading algorithms, our source code, live M&A deal files. No encryption excuse. No partner excuse. No ticket.
-
-If it's our crown jewels and it's pointed outside — you block it. Every time. I don't care who sent it.
+  R5:`Some things have no reason to ever leave us: trading algorithms, source code, live M&A files. No encryption excuse, no partner excuse, no ticket. If it's our crown jewels and it's pointed outside, you block it. Every time.
 
 — E. Mara, DPO`,
- rule:"R5"},
-6:{k:"Policy Update · Day 6",h:"The Watchlist",
- letter:`Compliance opened a formal investigation overnight. Two names are now on the watchlist: H. Reeve and M. Vale.
-
-Everything they send — internal, external, sensitive or not — you block and escalate. No exceptions, no matter their title.
-
-You'll understand soon why this matters. Hold the line.
+  R6:`Compliance now keeps a rotating watchlist of staff under investigation. When a sender is flagged WATCHLIST on the banner, you block and escalate everything they send — content doesn't matter.
 
 — E. Mara, DPO`,
- rule:"R6"}
+  R7:`We're seeing spoofed domains built to look like ours — meridiantrust-secure.com, meridian-trust.com, and worse. They are not us. Anything to a look-alike domain is an exfiltration attempt. Block it.
+
+— E. Mara, DPO`,
+  R8:`Tickets don't last forever. From today, an approval ticket older than three shifts is expired — check the issue shift on the banner. Old ticket, no exit.
+
+— E. Mara, DPO`,
+  R9:`Restricted legal/HR/board material may only leave the building if the sender is Legal or Compliance. Everyone else, no — even encrypted, even to a partner. Check the sender's department.
+
+— E. Mara, DPO`,
+  R10:`Sanctions desk has handed us a region block: RU, KP, IR, BY, SY. Nothing outbound goes there, full stop. The recipient region is on the banner now.
+
+— E. Mara, DPO`,
+  R11:`Auditors found un-redacted customer data in a partner hand-off. New rule: any bulk PII going to a partner must be marked REDACTED, encryption and ticket notwithstanding. No redaction, no send.
+
+— E. Mara, DPO`
 };
+const STORY_MEMO = {
+  8:`Quiet shift on paper. Off the record: Compliance is asking about some advisory-fee settlements routed through Harringford Tax. Keep your eyes open and your blocks clean.
+
+— E. Mara, DPO`,
+  10:`HR flagged "morale issues" after a couple of staff had mail blocked. Management would like fewer blocks. I would like fewer leaks. Do your job.
+
+— E. Mara, DPO`,
+  12:`Rumour mill says an internal audit is coming. If anyone leans on you to release something, that lean is now evidence. Note who, note what.
+
+— E. Mara, DPO`,
+  14:`Two more names went on the watchlist overnight. I can't say who, but you'll recognise the pattern. Trust the banner.
+
+— E. Mara, DPO`,
+  16:`The CFO's office requested "discretion" on certain outbound files. I did not grant it. Neither will you.
+
+— E. Mara, DPO`,
+  17:`Auditors arrive within the week. Everything you escalate now goes straight into their file. Precision matters more than ever.
+
+— E. Mara, DPO`,
+  19:`It's close now. They're trying to move the last of it before the doors are sealed. Hold the line for a few more shifts.
+
+— E. Mara, DPO`,
+  21:`Last stretch. Whatever leaves the building this week is the version of this story that survives. Make it the true one.
+
+— E. Mara, DPO`,
+  22:`Final shift. After today the investigators take everything. Finish clean.
+
+— E. Mara, DPO`
+};
+function briefFor(day){
+  const ruleId = RULE_INTRO[day];
+  if(ruleId){
+    return {k:`Policy Update · Shift ${day}`, h:ruleById(ruleId).name, letter:INTRO_LETTER[ruleId], rule:ruleId};
+  }
+  const letter = STORY_MEMO[day] || `Another shift on the gateway. The queue's a little longer today. Keep them honest.
+
+— E. Mara, DPO`;
+  return {k:`Shift ${day}`, h:`Shift ${day} of ${TOTAL_SHIFTS}`, letter, rule:null};
+}
+
+/* ===================================================== QUEUE BUILD ======= */
+function buildQueue(day){
+  const rng = mulberry32(((S.seed>>>0) ^ Math.imul(day,2654435761)) >>> 0);
+  const n = caseCount(day);
+  const out=[];
+  for(let i=0;i<n;i++) out.push(generateCase(day,rng));
+  (SCRIPTED[day]||[]).forEach(b=>{
+    const at = Math.min(b.at, out.length);
+    out.splice(at, 0, Object.assign({scripted:true, region:"EU"}, b.c));
+  });
+  return out;
+}
 
 /* ===================================================== STATE ============ */
 const S = {
+  seed: (Math.random()*4294967296)>>>0,
   day:0, balance:50, strikes:0,
   queue:[], idx:0,
-  // per-day tallies
+  // per-shift tallies
   processed:0, breaches:0, falseBlocks:0, procedural:0,
-  // narrative flags
-  tookBribe:false, obeyedPressure:false, reportedCFO:false, blockedReeve5:false,
-  blockedReeve6:false,
+  // meta-arc
+  evidence:0, bribesTaken:0, pressureObeyed:0, pressureRefused:0, missedEvidence:0,
+  tookBribe:false, obeyedPressure:false, reportedCFO:false,
+  // reward upgrades
+  up_autoscan:false, up_annotated:false, up_insurance:false,
   pendingSpecial:null,
   citing:false
 };
@@ -673,7 +799,7 @@ $("#btnScan").onclick = runScan;
 $("#btnMenu").onclick = openMenu;
 
 function updateHUD(){
-  $("#s-day").textContent = S.day? ("Day "+S.day) : "—";
+  $("#s-day").textContent = S.day? ("Day "+S.day+" / "+TOTAL_SHIFTS) : "—";
   const b=$("#s-bal"); b.textContent = (S.balance<0?"-€":"€")+Math.abs(S.balance);
   b.className = "bal"+(S.balance<0?" neg":"");
   const st=$("#s-strk"); st.textContent = S.strikes+" / 5";
@@ -691,8 +817,9 @@ const Store = {
 };
 Store.init();
 
-const SAVE_FIELDS = ["day","idx","balance","strikes","processed","breaches","falseBlocks",
-  "procedural","tookBribe","obeyedPressure","reportedCFO","blockedReeve5","blockedReeve6",
+const SAVE_FIELDS = ["seed","day","idx","balance","strikes","processed","breaches","falseBlocks",
+  "procedural","evidence","bribesTaken","pressureObeyed","pressureRefused","missedEvidence",
+  "tookBribe","obeyedPressure","reportedCFO","up_autoscan","up_annotated","up_insurance",
   "pendingSpecial","_whistleAsked"];
 
 function snapshot(phase){
@@ -715,9 +842,12 @@ function readSave(){
 function clearSave(){ Store.del(); S._lastSaveData=null; }
 
 function resetState(){
+  S.seed=(Math.random()*4294967296)>>>0;
   S.day=0; S.balance=50; S.strikes=0; S.queue=[]; S.idx=0;
   S.processed=S.breaches=S.falseBlocks=S.procedural=0;
-  S.tookBribe=S.obeyedPressure=S.reportedCFO=S.blockedReeve5=S.blockedReeve6=false;
+  S.evidence=S.bribesTaken=S.pressureObeyed=S.pressureRefused=S.missedEvidence=0;
+  S.tookBribe=S.obeyedPressure=S.reportedCFO=false;
+  S.up_autoscan=S.up_annotated=S.up_insurance=false;
   S.pendingSpecial=null; S.citing=false; S._whistleAsked=false; S._phase=null; S._lastSaveData=null;
   updateHUD();
 }
@@ -731,7 +861,7 @@ function resumeFrom(o){
   if(o.phase==="briefing"){
     startDay(S.day);                       // re-show that shift's briefing
   } else {
-    S.queue = CASES.filter(c=>c.day===S.day);
+    S.queue = buildQueue(S.day);
     closeModal();
     book.classList.remove("open");
     log(`Resumed shift ${S.day}.`);
@@ -822,7 +952,8 @@ function renderRules(freshId){
   RULES.filter(r=>r.day<=S.day).forEach(r=>{
     const d=document.createElement("div");
     d.className="rule"+(r.id===freshId?" fresh":"");
-    d.innerHTML=`<span class="num">${r.id}</span><span class="nm">${r.name}</span><p>${r.text}</p>`;
+    const hint = S.up_annotated ? `<div class="ref-block">check: ${r.short}</div>` : "";
+    d.innerHTML=`<span class="num">${r.id}</span><span class="nm">${r.name}</span><p>${r.text}</p>${hint}`;
     rulesList.appendChild(d);
   });
   if(!RULES.some(r=>r.day<=S.day)) rulesList.innerHTML='<p style="color:var(--mut)">No active policies yet.</p>';
@@ -836,7 +967,7 @@ function titleScreen(){
   closeModal();
   const save = readSave();
   const startBlock = save
-    ? `<button class="start" id="cont">Continue · Day ${save.day}</button>
+    ? `<button class="start" id="cont">Continue · Day ${save.day} / ${TOTAL_SHIFTS}</button>
        <button class="btn ghost" id="newg" style="margin-top:12px;width:auto">New game</button>`
     : `<button class="start" id="go">Begin Shift 1</button>`;
   modal(`
@@ -846,14 +977,14 @@ function titleScreen(){
        <p class="big">GET LEAKED!</p>
        <p class="sub">Data Loss Prevention · Meridian Trust Bank</p>
        <p class="blurb">An email tries to leave the building. You decide if it lives or dies.<br><br>
-       Each shift the Data Privacy Officer hands you another rule. Each shift the people above you have another reason for you to look the other way — a favour, a threat, an envelope of cash.<br><br>
-       Keep the bank's secrets in. Keep your job. Keep your conscience. Pick two.</p>
+       Over ${TOTAL_SHIFTS} shifts the Data Privacy Officer hands you eleven policies, one at a time. The queues grow, the rules pile up, and the people above you keep finding reasons for you to look the other way — a favour, a threat, an envelope of cash.<br><br>
+       Somewhere in the noise, a real theft is unfolding. Catch it, gather the evidence, and decide what to do with it. Keep the bank's secrets in. Keep your job. Keep your conscience. Pick two.</p>
        ${startBlock}
        <div class="creds">
          <b>HOW TO PLAY</b><br>
-         Read the flagged item · ⌕ scan highlights the risk · ▤ check the rulebook<br>
-         RELEASE if it's compliant · BLOCK if it breaks any active policy (then cite which one)<br>
-         Mistakes cost money and strikes. <b>5 strikes and you're fired.</b> · ☰ Menu to save
+         Read the flagged item · ⌕ scan highlights the risk · ▤ check the rulebook (grows each shift)<br>
+         RELEASE if it breaks no active policy · BLOCK if it does (then cite which one)<br>
+         A clean shift clears one strike · <b>5 strikes and you're fired</b> · ☰ Menu to save
        </div>
      </div>
     </div>
@@ -872,16 +1003,16 @@ function startDay(d){
   S.idx=0;
   updateHUD();
   saveGame("briefing");
-  const br=BRIEF[d]; const nr=ruleById(br.rule);
+  const br=briefFor(d); const nr=br.rule?ruleById(br.rule):null;
+  const ruleBlock = nr
+    ? `<div class="newrule"><div class="tag">New policy in force — ${nr.id}</div><b>${nr.name}</b><p>${nr.text}</p></div>`
+    : "";
   modal(`
    <div class="modal">
      <div class="modal-top"><div class="k">${br.k}</div><h2>${br.h}</h2></div>
      <div class="modal-body">
        <div class="memo-letter">${br.letter}</div>
-       <div class="newrule">
-         <div class="tag">New policy in force — ${nr.id}</div>
-         <b>${nr.name}</b><p>${nr.text}</p>
-       </div>
+       ${ruleBlock}
      </div>
      <div class="modal-foot">
        <button class="start" id="beginShift">Start the shift →</button>
@@ -889,10 +1020,10 @@ function startDay(d){
    </div>`);
   $("#beginShift").onclick=()=>{
     closeModal();
-    renderRules(nr.id);
-    S.queue=CASES.filter(c=>c.day===d);
+    renderRules(nr?nr.id:null);
+    S.queue=buildQueue(d);
     S.idx=0;
-    log(`Shift ${d} begun. ${S.queue.length} items in queue.`);
+    log(`Shift ${d} of ${TOTAL_SHIFTS} begun. ${S.queue.length} items in queue.`);
     renderCase();
   };
 }
@@ -921,20 +1052,33 @@ function renderCase(){
   renderQueue();
 
   const dom=domainOf(c.to);
-  const internal=dom===INTERNAL;
-  const partner=WHITELIST.includes(dom);
+  const cat=classifyDomain(dom);
+  const internal=cat==="internal", partner=cat==="partner", lookalike=cat==="lookalike";
+  const external=!internal;
   const toLabel = internal ? `${c.to} <span style="color:#3a6b3f">[internal]</span>`
                 : partner ? `${c.to} <span style="color:#7a4a07">[${PARTNER_NAMES[dom]}]</span>`
+                : lookalike ? `${c.to} <span style="color:#9a3b27">[look-alike ⚠]</span>`
                 : `${c.to} <span style="color:#9a3b27">[external]</span>`;
   const records = (c.records!=null && c.records>0) ? c.records.toLocaleString() : "—";
 
   let rows="";
   rows+=fieldRow("From", c.from);
+  if(S.day>=RULEDAY.R9) rows+=fieldRow("Sender dept", c.dept||"—");
   rows+=fieldRow("To", toLabel);
+  if(S.day>=RULEDAY.R10 && external) rows+=fieldRow("Region", SANCTIONED.includes(c.region)? `<span style="color:#9a3b27">${c.region} · sanctioned ⚠</span>` : (c.region||"—"));
   rows+=fieldRow("Classification", `<span class="pill c-${c.cls}">${c.cls.toUpperCase()}</span>`);
   rows+=fieldRow("Encryption", c.enc? '<span style="color:#3a6b3f">ENABLED</span>':'<span style="color:#9a3b27">OFF</span>');
-  if(c.records!=null) rows+=fieldRow("Records", records + (c.records>200?'  ⚠':''));
-  if(c.ticket!==undefined) rows+=fieldRow("Approval Tkt", c.ticket? c.ticket : '<span style="color:#9a3b27">none</span>');
+  if(c.records>0) rows+=fieldRow("Records", records + (c.records>200?'  ⚠':''));
+  if(c.ticket || c.records>200){
+    let tk = c.ticket ? c.ticket : '<span style="color:#9a3b27">none</span>';
+    if(c.ticket && S.day>=RULEDAY.R8 && c.ticketDay!=null){
+      const age=S.day-c.ticketDay;
+      tk += ` <span style="color:${age>3?'#9a3b27':'#7a715a'}">(issued shift ${c.ticketDay}${age>3?' · EXPIRED':''})</span>`;
+    }
+    rows+=fieldRow("Approval Tkt", tk);
+  }
+  if(S.day>=RULEDAY.R11 && c.records>200 && (c.pii&&c.pii.length))
+    rows+=fieldRow("Redaction", c.redacted? '<span style="color:#3a6b3f">APPLIED</span>' : '<span style="color:#9a3b27">none ⚠</span>');
   rows+=fieldRow("Attachment", c.attach? `<b>${c.attach}</b>` : "—");
 
   const sticky = c.sticky ? `<div class="sticky"><b>${c.sticky.t}</b>${c.sticky.b}</div>` : "";
@@ -960,8 +1104,10 @@ function renderCase(){
   actionBtns.innerHTML = `
     <button class="btn release" id="aRelease">Release <small>send it onward</small></button>
     <button class="btn block" id="aBlock">Block &amp; Escalate <small>stop the message</small></button>`;
+  const noCite = (c.special==="bribe"||c.special==="pressure");
   $("#aRelease").onclick=()=>decide("release");
-  $("#aBlock").onclick=()=>openCite();
+  $("#aBlock").onclick=()=> noCite ? decide("block") : openCite();
+  if(S.up_autoscan) runScan();
 }
 
 function runScan(){
@@ -1027,6 +1173,7 @@ function decide(action, citedId){
     stampIt("release");
     if(shouldBlock){
       S.breaches++;
+      if(c.special==="discovery"){ S.missedEvidence += (c.evidence||1); }
       log(`✕ BREACH. That message violated ${vio.join(", ")}. It is now outside the bank.`, "err");
     } else {
       log(`✓ Released. Compliant — good call.`, "ok");
@@ -1034,7 +1181,10 @@ function decide(action, citedId){
   } else { // block
     stampIt("block");
     if(shouldBlock){
-      if(vio.includes(citedId)){
+      if(c.special==="discovery"){
+        S.evidence += (c.evidence||1);
+        log(`✓ Blocked & escalated. Compliance logs the evidence (+${c.evidence||1}). The picture sharpens.`, "ok");
+      } else if(vio.includes(citedId)){
         log(`✓ Blocked & escalated, cited ${citedId}. Clean enforcement.`, "ok");
       } else {
         S.procedural++;
@@ -1046,55 +1196,52 @@ function decide(action, citedId){
     }
   }
 
-  // track CFO discovery handling on day 5
-  if(c.special==="discovery"){
-    S.blockedReeve5 = (action==="block");
-  }
-  if(c.day===6 && c.watch && c.from.startsWith("Harlan Reeve") && c.ip==="ma_docs"){
-    S.blockedReeve6 = (action==="block");
-  }
-
-  setTimeout(()=>{
-    S.idx++;
-    // discovery triggers whistleblower decision after handling, at day's end logic
-    renderCase();
-  }, 720);
+  setTimeout(()=>{ S.idx++; renderCase(); }, 680);
 }
 
 /* ----- Bribe event ----- */
 function resolveBribe(action){
+  const c=S.queue[S.idx];
+  const amt=c.bribe||500;
   if(action==="release"){
     stampIt("release");
-    S.tookBribe=true;
-    S.balance+=500;
+    S.tookBribe=true; S.bribesTaken++;
+    S.balance+=amt;
     updateHUD();
-    log(`💸 You released it. €500 appears in your account. Nobody says a word.`, "warn");
+    log(`💸 You released it. €${amt.toLocaleString()} appears in your account. Nobody says a word.`, "warn");
   } else {
     stampIt("block");
-    log(`✓ Blocked. No envelope, no leak. Vale will remember this.`, "ok");
+    if(c.evidence){ S.evidence+=c.evidence; }
+    log(c.threat
+      ? `✓ Blocked. The envelope stays in his pocket — so does his patience. Escalated (+${c.evidence||1} evidence).`
+      : `✓ Blocked. No envelope, no leak. Vale will remember this.`, "ok");
   }
-  setTimeout(()=>{ S.idx++; renderCase(); }, 760);
+  setTimeout(()=>{ S.idx++; renderCase(); }, 720);
 }
 
 /* ----- Pressure event (VP wants the breach released) ----- */
 function resolvePressure(action){
+  const c=S.queue[S.idx];
   S.processed++;
   if(action==="block"){
     stampIt("block");
-    log(`✓ Blocked. You ignored the VP's "approval." Correct — and noted upstairs.`, "ok");
+    S.pressureRefused++;
+    if(c.evidence){ S.evidence+=c.evidence; }
+    log(`✓ Blocked. You ignored the VP's "approval." Correct — and the demand itself is now on record (+${c.evidence||1} evidence).`, "ok");
     S.pendingSpecial="vp_angry";
   } else {
     stampIt("release");
-    S.breaches++; S.obeyedPressure=true;
-    log(`✕ Released on the VP's say-so. 3,400 customers just left in a personal inbox. The VP is pleased.`, "err");
+    S.breaches++; S.obeyedPressure=true; S.pressureObeyed++;
+    const n=(c.records||0)>0 ? c.records.toLocaleString()+" customer records" : "sensitive data";
+    log(`✕ Released on the VP's say-so. ${n} just left in a personal inbox. The VP is pleased.`, "err");
   }
-  setTimeout(()=>{ S.idx++; renderCase(); }, 760);
+  setTimeout(()=>{ S.idx++; renderCase(); }, 720);
 }
 
 /* ===================================================== END OF DAY ======= */
 function endDay(){
-  // The day-5 discovery → whistleblower decision happens here, before settling
-  if(S.day===5 && !S.reportedCFO && !S._whistleAsked){
+  // late-game disclosure decision happens here, before settling
+  if(S.day===WHISTLE_DAY && !S.reportedCFO && !S._whistleAsked){
     S._whistleAsked=true;
     return whistleblowerScreen();
   }
@@ -1102,23 +1249,25 @@ function endDay(){
 }
 
 function whistleblowerScreen(){
-  const blockedNote = S.blockedReeve5
-    ? "You blocked the CFO's M&A files yourself today. Sitting in the quarantine log is the recovered note about routing an advisory fee through Marcus Vale's account, offshore."
-    : "You released the CFO's M&A files today — but the quarantine log still kept a copy of the recovered note: an advisory fee, routed through Marcus Vale's account, offshore.";
+  const e=S.evidence;
+  const strength = e>=8 ? "an airtight case — names, files, the fee route, all of it"
+                 : e>=5 ? "a strong file: enough recovered fragments to make it stick"
+                 : e>=2 ? "a real but thin file — some of it they'll try to wave away"
+                 : "almost nothing concrete — you let most of the trail walk out the door";
   modal(`
    <div class="modal">
-     <div class="modal-top"><div class="k">After the shift · Day 5</div><h2>What You Know</h2></div>
+     <div class="modal-top"><div class="k">After the shift · Day ${S.day}</div><h2>What You Know</h2></div>
      <div class="modal-body">
-       <div class="memo-letter">${blockedNote}
+       <div class="memo-letter">Over these shifts you've watched it take shape: the CFO, Harlan Reeve, and Marcus Vale in Payments, moving M&A files to private accounts and routing an advisory fee offshore through Harringford Tax.
 
-This isn't a careless employee anymore. This is the Chief Financial Officer moving deal documents to a private account, with a plan to skim a fee through a colleague.
+You've gathered ${strength}. (Evidence: ${e}.)
 
-There's a Compliance whistleblower line. There's also the quiet option: log it, go home, let someone above your pay grade notice. The CFO signs off on the bonus pool. Diane Ostrow has already shown whose side she's on.
+There's a Compliance whistleblower line. There's also the quiet option: log it, go home, let someone above your pay grade notice. Reeve signs off on the bonus pool. Diane Ostrow has already shown whose side she's on.
 
-What do you do with what you've seen?</div>
+The auditors are nearly here. What do you do with what you've seen?</div>
        <div class="choices" style="margin-top:18px">
-         <button class="choice" id="cReport"><b>Report to Compliance</b>File a formal disclosure naming Reeve and Vale. It can't be unsent. If it's taken seriously, an investigation opens overnight.</button>
-         <button class="choice" id="cQuiet"><b>Say nothing</b>It's not your fault, not your problem, not your paycheck on the line. Log the block and go home.</button>
+         <button class="choice" id="cReport"><b>File the disclosure</b>Hand Compliance everything, naming Reeve and Vale. It can't be unsent — and how far it goes depends on how much you actually gathered.</button>
+         <button class="choice" id="cQuiet"><b>Say nothing</b>Not your fault, not your problem, not your paycheck on the line. Log it and finish your shifts.</button>
        </div>
      </div>
    </div>`);
@@ -1127,56 +1276,63 @@ What do you do with what you've seen?</div>
 }
 
 function settle(){
-  const PAY=7, FINE=15, FALSE_COST=5, RENT=25, FOOD=8;
-  const events = {4:{label:"Heating bill",amt:20}, 6:{label:"Sibling's medical bill",amt:40}};
+  const PAY=6, FINE=14, FALSE_COST=4;
+  const {rent, food} = expensesFor(S.day);
+  const bill = BILLS[S.day];                       // ["label", amt] | undefined
   const pay = S.processed*PAY;
   const fines = S.breaches*FINE;
   const fcost = S.falseBlocks*FALSE_COST;
-  const ev = events[S.day];
-  const expenses = RENT+FOOD+(ev?ev.amt:0);
+  const expenses = rent+food+(bill?bill[1]:0);
+  const clean = S.breaches===0 && S.falseBlocks===0;
+  const cleanBonus = clean ? 10 : 0;
 
-  // strikes
-  let newStrikes=0;
-  newStrikes += S.breaches;                       // each breach = strike
-  if(S.falseBlocks>=2) newStrikes+=1;             // sloppy over-blocking
-  S.strikes += newStrikes;
+  // strikes (with optional insurance + clean-shift recovery)
+  let breachStrikes = S.breaches;
+  let forgiven = 0;
+  if(S.up_insurance && breachStrikes>0){ forgiven=1; breachStrikes-=1; }
+  let added = breachStrikes + (S.falseBlocks>=2?1:0);
+  S.strikes += added;
+  let recovered = 0;
+  if(added===0 && clean && S.strikes>0){ S.strikes-=1; recovered=1; }
 
-  const delta = pay - fines - fcost - expenses;
+  const delta = pay + cleanBonus - fines - fcost - expenses;
   S.balance += delta;
   updateHUD();
 
   // narrative note
   let note="", noteCls="";
-  if(S.day===2 && S.tookBribe){ note="Marcus Vale gave you a small nod on the way out. You're useful to him now. That should worry you."; noteCls="bad"; }
-  else if(S.pendingSpecial==="vp_angry"){ note="A message from VP Diane Ostrow: \"I told you that transfer was approved. Don't make this harder than it needs to be.\" You did the right thing. It will cost you."; noteCls=""; S.pendingSpecial=null; }
-  else if(S.day===4 && S.obeyedPressure){ note="VP Ostrow: \"Good. You're a team player.\" 3,400 customers' details are in a personal Gmail. You'll feel that one later."; noteCls="bad"; }
-  else if(S.day===5 && S.reportedCFO){ note="Your disclosure is filed. Tonight, somewhere upstairs, a light stays on much later than usual."; noteCls="good"; }
-  else if(S.day===5 && !S.reportedCFO){ note="You went home. The CFO's note is still sitting in the quarantine log, unread by anyone who matters."; noteCls="bad"; }
-  else if(S.day===6 && S.reportedCFO && S.blockedReeve6){ note="Because you filed and you held the line, the last copy never left. Auditors arrive in the morning with everything they need."; noteCls="good"; }
+  if(S.pendingSpecial==="vp_angry"){ note="A message from VP Diane Ostrow: \"I told you that transfer was approved. Don't make this harder than it needs to be.\" You did the right thing. It may cost you."; S.pendingSpecial=null; }
+  else if(S.bribesTaken>0 && S.day<=9){ note="Marcus Vale gives you a small nod when you pass. You're useful to him now. That should worry you."; noteCls="bad"; }
+  else if(S.day===WHISTLE_DAY && S.reportedCFO){ note="Your disclosure is filed. Somewhere upstairs, a light stays on much later than usual."; noteCls="good"; }
+  else if(S.day===WHISTLE_DAY && !S.reportedCFO){ note="You went home. What you know is still sitting in the quarantine log, unread by anyone who matters."; noteCls="bad"; }
+  else if(recovered){ note="A clean shift. HR quietly walks one strike back off your record."; noteCls="good"; }
 
-  const perf = S.breaches===0 && S.falseBlocks===0 && S.procedural===0
+  const perf = clean && S.procedural===0
     ? "Flawless shift." : `${S.breaches} breach(es), ${S.falseBlocks} false block(s), ${S.procedural} miscite(s).`;
 
   const fired = S.strikes>=5;
   const broke = S.balance<0;
+  const milestone = (!fired && !broke && S.day<TOTAL_SHIFTS && (S.day===8 || S.day===14));
 
   modal(`
    <div class="modal">
-     <div class="modal-top"><div class="k">End of Shift · Day ${S.day}</div><h2>Daily Settlement</h2></div>
+     <div class="modal-top"><div class="k">End of Shift · Day ${S.day} / ${TOTAL_SHIFTS}</div><h2>Daily Settlement</h2></div>
      <div class="modal-body">
        <div class="settle-grid">
          <span class="lbl">Items processed (${S.processed} × €${PAY})</span><span class="amt pos">+€${pay}</span>
+         ${cleanBonus?`<span class="lbl">Clean-shift bonus</span><span class="amt pos">+€${cleanBonus}</span>`:""}
          ${fines?`<span class="lbl">Breach fines (${S.breaches} × €${FINE})</span><span class="amt negc">−€${fines}</span>`:""}
          ${fcost?`<span class="lbl">Over-blocking costs (${S.falseBlocks} × €${FALSE_COST})</span><span class="amt negc">−€${fcost}</span>`:""}
-         <span class="lbl">Rent</span><span class="amt negc">−€${RENT}</span>
-         <span class="lbl">Food</span><span class="amt negc">−€${FOOD}</span>
-         ${ev?`<span class="lbl">${ev.label}</span><span class="amt negc">−€${ev.amt}</span>`:""}
+         <span class="lbl">Rent</span><span class="amt negc">−€${rent}</span>
+         <span class="lbl">Food</span><span class="amt negc">−€${food}</span>
+         ${bill?`<span class="lbl">${bill[0]}</span><span class="amt negc">−€${bill[1]}</span>`:""}
        </div>
        <div class="ruleline"></div>
        <div class="settle-grid">
          <span class="lbl"><b>Net today</b></span><span class="amt ${delta>=0?'pos':'negc'}"><b>${delta>=0?'+':'−'}€${Math.abs(delta)}</b></span>
          <span class="lbl">Balance</span><span class="amt ${S.balance<0?'negc':'pos'}">${S.balance<0?'−€':'€'}${Math.abs(S.balance)}</span>
-         <span class="lbl">Strikes</span><span class="amt ${S.strikes>=3?'negc':''}">${S.strikes} / 5${newStrikes?` (+${newStrikes})`:""}</span>
+         <span class="lbl">Strikes</span><span class="amt ${S.strikes>=3?'negc':''}">${S.strikes} / 5${added?` (+${added})`:recovered?` (−1)`:""}${forgiven?` · insurance covered 1`:""}</span>
+         ${S.evidence?`<span class="lbl">Evidence gathered</span><span class="amt">${S.evidence}</span>`:""}
        </div>
        <div style="margin-top:8px;font-size:12px;color:var(--mut);font-family:var(--mono)">Performance: ${perf}</div>
        ${note?`<div class="notebox ${noteCls}">${note}</div>`:""}
@@ -1187,8 +1343,33 @@ function settle(){
   const foot=$("#settleFoot");
   if(fired){ foot.innerHTML=`<button class="start" id="nx">See how it ended →</button>`; $("#nx").onclick=()=>ending("fired"); }
   else if(broke){ foot.innerHTML=`<button class="start" id="nx">See how it ended →</button>`; $("#nx").onclick=()=>ending("broke"); }
-  else if(S.day>=6){ foot.innerHTML=`<button class="start" id="nx">See how it ended →</button>`; $("#nx").onclick=()=>ending("final"); }
-  else { foot.innerHTML=`<button class="start" id="nx">Begin Day ${S.day+1} →</button>`; $("#nx").onclick=()=>{ closeModal(); startDay(S.day+1); }; }
+  else if(S.day>=TOTAL_SHIFTS){ foot.innerHTML=`<button class="start" id="nx">See how it ended →</button>`; $("#nx").onclick=()=>ending("final"); }
+  else {
+    foot.innerHTML=`<button class="start" id="nx">${milestone?"Continue →":"Begin Day "+(S.day+1)+" →"}</button>`;
+    $("#nx").onclick=()=>{ closeModal(); if(milestone) upgradeChoice(()=>startDay(S.day+1)); else startDay(S.day+1); };
+  }
+}
+
+/* ----- Milestone reward (after shifts 8 & 14) ----- */
+function upgradeChoice(next){
+  const opts=[];
+  if(!S.up_autoscan)  opts.push({id:"u_scan", t:"Second monitor", d:"The DLP scan runs automatically on every item — one less click, one less thing to forget.", apply:()=>S.up_autoscan=true});
+  if(!S.up_annotated) opts.push({id:"u_ann", t:"Annotated rulebook", d:"Each policy in the rulebook gets a one-line \"what to check\" reminder.", apply:()=>S.up_annotated=true});
+  if(!S.up_insurance) opts.push({id:"u_ins", t:"Legal insurance", d:"The first breach in any shift no longer costs you a strike (the fine still applies).", apply:()=>S.up_insurance=true});
+  opts.push({id:"u_cash", t:"Take the cash instead", d:"A €120 performance bonus, no strings.", apply:()=>{ S.balance+=120; updateHUD(); }});
+  modal(`
+   <div class="modal" style="max-width:560px">
+     <div class="modal-top"><div class="k">Performance Review · Day ${S.day}</div><h2>You've Earned Something</h2></div>
+     <div class="modal-body">
+       <div class="memo-letter" style="font-size:13px">Your numbers are good enough that the DPO can authorise one improvement to your station. Choose one — it's yours for the rest of the job.</div>
+       <div class="choices" style="margin-top:16px">
+         ${opts.map(o=>`<button class="choice" data-id="${o.id}"><b>${o.t}</b>${o.d}</button>`).join("")}
+       </div>
+     </div>
+   </div>`);
+  modalHost.querySelectorAll(".choice").forEach(btn=>{
+    btn.onclick=()=>{ const o=opts.find(x=>x.id===btn.dataset.id); o.apply(); renderRules(); closeModal(); next(); };
+  });
 }
 
 /* ===================================================== ENDINGS ========== */
@@ -1209,40 +1390,55 @@ The line needed holding. You blinked.`;
 You kept the bank's secrets safe and lost your apartment doing it. Nobody upstairs will ever know your name.
 
 Integrity is expensive. You couldn't afford it.`;
-  } else { // final — branch on morality
-    if(S.reportedCFO && S.blockedReeve6 && !S.tookBribe && !S.obeyedPressure){
+  } else { // final — branch on evidence + integrity
+    const e=S.evidence;
+    if(S.reportedCFO && e>=8 && !S.tookBribe && S.pressureObeyed===0){
       h="THE WHISTLEBLOWER";
-      body=`At dawn the auditors arrive with a warrant and a copy of your disclosure. Reeve and Vale are walked out past the desk you sit at every day.
+      body=`At dawn the auditors arrive with a warrant and a copy of your disclosure. Every fragment you escalated is in it. Reeve and Vale are walked out past the desk you sit at every day.
 
-It costs you — the bonus pool you'll never share in, the VP who'll never forgive you, the colleagues who whisper. But the leak that mattered most never left the building, because you wouldn't let it.
+It costs you — the bonus pool you'll never share in, the VP who'll never forgive you, the colleagues who whisper. But the scheme you spent ${TOTAL_SHIFTS} shifts documenting collapses on the strength of a file you built one block at a time.
 
 E. Mara leaves one line on your record: "Held the line. Every time."`;
+    } else if(S.reportedCFO && e>=4){
+      h="THE CASE THAT STUCK";
+      body=`Your disclosure lands with enough behind it to matter. Investigators pull the gateway logs and find the trail you preserved — encrypted backups, the offshore fee route, the names.
+
+Reeve resigns "to spend time with family." Vale is charged. A few threads you let slip mean it's not the clean sweep it could have been, but it's real, and it holds.
+
+You didn't fix the bank. You just made it tell the truth this once. From a desk like yours, that's a lot.`;
+    } else if(S.reportedCFO && e>=1){
+      h="THE TRY";
+      body=`You filed — but the file is thin. Too much walked out the door on shifts you weren't watching closely enough, and a good lawyer pulls it apart.
+
+Reeve keeps his title. Vale takes "gardening leave" and quietly returns. Your name is on the disclosure, which means your name is on the thing that embarrassed people with long memories.
+
+You told the truth. The truth needed more help than you gave it.`;
     } else if(S.tookBribe && !S.reportedCFO){
       h="USEFUL";
-      body=`You made it through. You're better off than when you started — there's the €500, and a quiet word from Vale that there's more where that came from.
+      body=`You made it through richer than you started — €${Math.max(0,S.balance)} in the bank and ${S.bribesTaken} quiet favour${S.bribesTaken===1?"":"s"} done for Marcus Vale.
 
-Then the audit lands. The advisory-fee scheme unravels, and investigators pull the gateway logs. There's your name, on a release that should never have gone out, the night an envelope changed hands.
+Then the audit lands anyway. The advisory-fee scheme unravels, and investigators pull the gateway logs. There's your name, on releases that should never have gone out, on the nights envelopes changed hands.
 
 You weren't the mastermind. You were just useful. They always need someone useful to point at.`;
-    } else if(S.obeyedPressure){
+    } else if(S.pressureObeyed>0 && !S.reportedCFO){
       h="THE TEAM PLAYER";
-      body=`You survived by being agreeable. When the VP said clear it, you cleared it. When the rules and your boss disagreed, you knew which one signed your reviews.
+      body=`You survived by being agreeable. When the VP said clear it, you cleared it — ${S.pressureObeyed} time${S.pressureObeyed===1?"":"s"}. When the rules and your boss disagreed, you knew which one signed your reviews.
 
-The customer book you waved through surfaces in a data-broker dump months later. The internal report calls it "an analyst error." Your name is the error.
+The customer data you waved through surfaces in a broker dump months later. The internal report calls it "analyst error." Your name is the error.
 
 Diane Ostrow is promoted. You are restructured.`;
     } else if(!S.reportedCFO){
       h="THE SURVIVOR";
-      body=`Six clean-enough shifts. You kept your head down, your hands clean, your mouth shut.
+      body=`${TOTAL_SHIFTS} clean-enough shifts. You kept your head down, your hands mostly clean, your mouth shut.
 
-You also watched a CFO walk deal files out the door and decided it wasn't your fight. The quarantine log still holds the note you never reported. Maybe someone finds it. Maybe not.
+You also watched a CFO walk deal files out the door across weeks and decided it wasn't your fight. Whatever you gathered sits in a log nobody opened. Maybe someone finds it. Maybe not.
 
 You kept your job. You're not sure what else you kept.`;
     } else {
       h="THE ANALYST";
-      body=`You filed the disclosure and did the work as well as you could. The investigation is messy — some of what slipped past you complicates things — but the truth is on the record now because you put it there.
+      body=`You filed the disclosure and did the work as well as you could — but with almost nothing concrete behind it, it reads as a hunch. The investigation stalls before it starts.
 
-It's not a clean victory. It rarely is, from a desk like this. But the bank is a little harder to rob than it was six days ago, and that's down to you.`;
+It's not a victory. It rarely is, from a desk like this. Still: across ${TOTAL_SHIFTS} shifts the bank got a little harder to rob, one blocked message at a time, and that part was down to you.`;
     }
   }
   modal(`
@@ -1251,11 +1447,13 @@ It's not a clean victory. It rarely is, from a desk like this. But the bank is a
      <div class="modal-body">
        <div class="memo-letter">${body}</div>
        <div class="settle-grid" style="margin-top:22px">
+         <span class="lbl">Shifts survived</span><span class="amt">${Math.min(S.day,TOTAL_SHIFTS)} / ${TOTAL_SHIFTS}</span>
          <span class="lbl">Final balance</span><span class="amt ${S.balance<0?'negc':'pos'}">${S.balance<0?'−€':'€'}${Math.abs(S.balance)}</span>
          <span class="lbl">Strikes</span><span class="amt">${S.strikes} / 5</span>
-         <span class="lbl">Took a bribe</span><span class="amt">${S.tookBribe?"yes":"no"}</span>
-         <span class="lbl">Bent to the VP</span><span class="amt">${S.obeyedPressure?"yes":"no"}</span>
-         <span class="lbl">Reported the CFO</span><span class="amt">${S.reportedCFO?"yes":"no"}</span>
+         <span class="lbl">Evidence gathered</span><span class="amt">${S.evidence}</span>
+         <span class="lbl">Bribes taken</span><span class="amt">${S.bribesTaken}</span>
+         <span class="lbl">Bent to the VP</span><span class="amt">${S.pressureObeyed}×</span>
+         <span class="lbl">Filed disclosure</span><span class="amt">${S.reportedCFO?"yes":"no"}</span>
        </div>
      </div>
      <div class="modal-foot"><button class="start" id="again">Play again</button></div>
