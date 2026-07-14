@@ -1,4 +1,0 @@
-// Root build file.
-// All plugin versions are managed centrally in settings.gradle (pluginManagement).
-// Intentionally left without a plugins{} block so no second AGP version can land
-// on the classpath.
