@@ -1,8 +1,0 @@
-<resources xmlns:tools="http://schemas.android.com/tools">
-    <style name="Theme.Clearance" parent="Theme.AppCompat.NoActionBar">
-        <item name="android:windowBackground">@color/desk</item>
-        <item name="android:statusBarColor">@color/bar</item>
-        <item name="android:navigationBarColor">@color/bar</item>
-        <item name="android:windowLightStatusBar" tools:targetApi="m">false</item>
-    </style>
-</resources>
